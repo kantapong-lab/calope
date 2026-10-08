@@ -101,3 +101,8 @@ Date: 2026-10-08. Rerun on Node v24.21.0 (installed with user approval, default 
 | 6 | Live Anthropic call | **blocked: key not provided** | `ANTHROPIC_API_KEY` not set; open item B-5 (owner PM) |
 
 Verdict: **Pass** (checks 1 to 4). Named open item for the Human gate: B-5, live call blocked until a key is supplied via env (also blocks the Haiku/Sonnet token measurements). Still pending for later 3d work: secret scan of `.next/static`, body-limit probe, `maxDuration`, Vercel Preview build.
+
+### Smoke check update (step 4, devops)
+- `GET /api/health` now returns exactly `{"status":"ok"}` (BE); smoke asserts HTTP 200 and that body, nothing else (no node/key booleans). The round 2/3 scaffold body was a temporary smoke stub.
+- POST routes require an `Origin` header (same-origin check, BAD_ORIGIN otherwise); smoke POSTs must send `Origin: <app origin>`, and one probe without it should expect the BAD_ORIGIN error.
+- Scripts added: `npm run db:generate`, `npm run db:migrate` (drizzle-kit, config `scripts/drizzle.config.ts`, BE-owned file); `tsx` for the spike runner (`npx tsx --conditions react-server`); `npm test`, `npm run lint`.

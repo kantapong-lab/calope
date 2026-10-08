@@ -106,3 +106,13 @@ Verdict: **Pass** (checks 1 to 4). Named open item for the Human gate: B-5, live
 - `GET /api/health` now returns exactly `{"status":"ok"}` (BE); smoke asserts HTTP 200 and that body, nothing else (no node/key booleans). The round 2/3 scaffold body was a temporary smoke stub.
 - POST routes require an `Origin` header (same-origin check, BAD_ORIGIN otherwise); smoke POSTs must send `Origin: <app origin>`, and one probe without it should expect the BAD_ORIGIN error.
 - Scripts added: `npm run db:generate`, `npm run db:migrate` (drizzle-kit, config `scripts/drizzle.config.ts`, BE-owned file); `tsx` for the spike runner (`npx tsx --conditions react-server`); `npm test`, `npm run lint`.
+
+## Staging on Docker Desktop (supersedes the Vercel staging target)
+
+Date: 2026-10-08. Vercel is no longer the staging target; staging is `docker compose` on Docker Desktop (Docker 29.1.3). Production stays a later decision (Vercel text above is historical, not current for staging).
+- Files: `Dockerfile` (node:24.21.0-bookworm-slim, stages deps / prod-deps / builder / runner, `npm ci`, `npm run build`, non-root `node` user, `next start` on 3000, HEALTHCHECK `/api/health`), `docker-compose.yml` (db postgres:17 + named volume `pgdata` + pg_isready healthcheck, one-shot `migrate` = `npm run db:migrate` from the builder stage, `app` depends on db healthy and migrate completed), `.dockerignore`, `.env.staging.example`.
+- Config: `.env.local` (Anthropic token and model, git-ignored) and `.env.staging.local` (git-ignored: POSTGRES_*, DATABASE_URL host `db`, AUTH_*, ANTHROPIC_API_KEY placeholder). No secret values in tracked files, none in the image (verified: no ANTHROPIC/AUTH/DATABASE env or history in the image). Note `env_file: .env.local` passes `ANTHROPIC_AUTH_TOKEN` into the app container environment at runtime; the app does not read it.
+- Ports: db bound to 127.0.0.1:5432, app on 3000.
+- Result: `docker compose up -d --build` OK; migrations applied (users, accounts, consent_records, meal_logs, analysis_events); `GET http://localhost:3000/api/health` 200 `{"status":"ok"}`; app and db healthy.
+- DB-backed tests against compose Postgres (host, DATABASE_URL localhost:5432): `npm test` 187 passed / 17 files; QA suite `npx vitest run --config tests/e2e/vitest.config.ts` 257 passed, 6 skipped (intentional not-run items in not-run.test.ts), 0 failed; the e2e-db persistence tests now run and pass.
+- No live Anthropic call made. Google sign-in not testable (placeholder client). Current Anthropic token is not usable with x-api-key (open: standard key or bearer path).

@@ -2,7 +2,7 @@
 import { readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 
-const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".vercel", ".team", ".claude", "docs"]);
+const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".vercel", ".team", ".claude"]);
 const PATH_PATTERN = /thfood|thai[-_ ]?fcd|(^|[\\/._-])fcd([\\/._-]|$)/i;
 const DATA_EXTENSIONS = /\.(csv|xlsx?|json|sqlite3?|db|parquet|tsv)$/i;
 

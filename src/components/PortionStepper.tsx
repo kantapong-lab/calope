@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { th } from "@/copy/th";
 
 type Props = {
@@ -21,10 +21,12 @@ export function PortionStepper({ label, value, step, min, max, decimals = 0, onC
   const [draft, setDraft] = useState(String(value));
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
     setDraft(String(round(value, decimals)));
     setError(null);
-  }, [value, decimals]);
+  }
 
   const stepBy = (delta: number) => commit(round(Math.min(max, Math.max(min, value + delta)), decimals));
 

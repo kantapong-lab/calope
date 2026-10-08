@@ -24,17 +24,18 @@ export function HistoryList() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const rows = useRef(new Map<string, HTMLLIElement>());
 
-  const load = useCallback(async () => {
-    setStatus("loading");
-    try {
-      const page = await listMeals();
-      setMeals(page.items);
-      setNext(page.next_before);
-      setStatus("ready");
-    } catch {
-      setStatus("error");
-    }
-  }, []);
+  const load = useCallback(
+    () =>
+      listMeals().then(
+        (page) => {
+          setMeals(page.items);
+          setNext(page.next_before);
+          setStatus("ready");
+        },
+        () => setStatus("error"),
+      ),
+    [],
+  );
 
   useEffect(() => {
     load();
@@ -89,7 +90,14 @@ export function HistoryList() {
           <strong>{th.history.errorTitle}</strong>
         </p>
         <p>{th.history.errorBody}</p>
-        <button type="button" className="btn btn-secondary" onClick={load}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            setStatus("loading");
+            load();
+          }}
+        >
           {th.history.retry}
         </button>
       </div>

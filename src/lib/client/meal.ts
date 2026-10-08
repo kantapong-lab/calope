@@ -60,9 +60,9 @@ export function withManualKcal(item: Item, kcal: number): Item {
   };
 }
 
-// The user changed the dish name without re-estimating: numbers stay, the English name no longer applies.
+// Rename without re-estimate: numbers and name_en stay (AC-22); only name_th changes.
 export function withRename(item: Item, name: string): Item {
-  return { ...item, name_th: name, name_en: "", edited: true };
+  return { ...item, name_th: name, edited: true };
 }
 
 export function withReestimate(dish: Dish): Item {

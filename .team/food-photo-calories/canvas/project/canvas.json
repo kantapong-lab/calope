@@ -1,0 +1,31 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-08T12:00:00Z" },
+  "title": "Food Photo Calories - Design Canvas",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "signin.dc.html": { "x": 0, "y": 0, "w": 390, "h": 844, "title": "Sign-in", "expand": "fill" },
+    "signed-out.dc.html": { "x": 470, "y": 0, "w": 390, "h": 844, "title": "Signed out", "expand": "fill" },
+    "Main.dc.html": { "x": 940, "y": 0, "w": 390, "h": 844, "title": "Capture", "expand": "fill" },
+    "consent.dc.html": { "x": 1410, "y": 0, "w": 390, "h": 1400, "title": "Consent", "expand": "fill" },
+    "file-rejected.dc.html": { "x": 1880, "y": 0, "w": 390, "h": 844, "title": "File rejected", "expand": "fill" },
+    "analysing.dc.html": { "x": 0, "y": 1520, "w": 390, "h": 844, "title": "Loading", "expand": "fill" },
+    "result.dc.html": { "x": 470, "y": 1520, "w": 390, "h": 1400, "title": "Result", "expand": "fill" },
+    "result-edit.dc.html": { "x": 940, "y": 1520, "w": 390, "h": 1400, "title": "Edit dish and portion", "expand": "fill" },
+    "not-food.dc.html": { "x": 1410, "y": 1520, "w": 390, "h": 844, "title": "Not food", "expand": "fill" },
+    "error-fallback.dc.html": { "x": 1880, "y": 1520, "w": 390, "h": 1000, "title": "Error and manual form", "expand": "fill" },
+    "rate-limit.dc.html": { "x": 0, "y": 3040, "w": 390, "h": 844, "title": "Rate limit", "expand": "fill" },
+    "manual.dc.html": { "x": 470, "y": 3040, "w": 390, "h": 844, "title": "Manual entry", "expand": "fill" },
+    "saved.dc.html": { "x": 940, "y": 3040, "w": 390, "h": 844, "title": "Saved", "expand": "fill" },
+    "history.dc.html": { "x": 1410, "y": 3040, "w": 390, "h": 1400, "title": "History", "expand": "fill" },
+    "history-states.dc.html": { "x": 1880, "y": 3040, "w": 390, "h": 900, "title": "History states", "expand": "fill" },
+    "history-delete.dc.html": { "x": 0, "y": 4560, "w": 390, "h": 844, "title": "Delete one item", "expand": "fill" },
+    "settings.dc.html": { "x": 470, "y": 4560, "w": 390, "h": 844, "title": "Settings", "expand": "fill" },
+    "settings-withdrawn.dc.html": { "x": 940, "y": 4560, "w": 390, "h": 844, "title": "Settings withdrawn", "expand": "fill" },
+    "delete-confirm.dc.html": { "x": 1410, "y": 4560, "w": 390, "h": 844, "title": "Delete all confirm", "expand": "fill" }
+  },
+  "order": ["Main.dc.html", "signin.dc.html", "signed-out.dc.html", "consent.dc.html", "file-rejected.dc.html", "analysing.dc.html", "result.dc.html", "result-edit.dc.html", "not-food.dc.html", "error-fallback.dc.html", "rate-limit.dc.html", "manual.dc.html", "saved.dc.html", "history.dc.html", "history-states.dc.html", "history-delete.dc.html", "settings.dc.html", "settings-withdrawn.dc.html", "delete-confirm.dc.html"],
+  "notes": {},
+  "designSystems": []
+}

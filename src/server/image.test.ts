@@ -57,6 +57,12 @@ describe("processImage", () => {
     expect(meta.orientation).toBeUndefined();
   });
 
+  it("rejects an input above the 40 megapixel limit before decoding it", async () => {
+    const huge = await solid(8000, 5200).png({ compressionLevel: 9 }).toBuffer();
+    expect(huge.length).toBeLessThan(1_000_000);
+    await expect(processImage(huge)).rejects.toThrow(/pixel/i);
+  });
+
   it("rejects bytes that have image magic but cannot be decoded", async () => {
     await expect(processImage(Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x01]))).rejects.toThrow();
   });

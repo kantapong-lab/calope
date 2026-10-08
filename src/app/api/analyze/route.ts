@@ -79,4 +79,4 @@ export const POST = api("POST /api/analyze", async (req, _params, ctx) => {
     ctx.extra.attempts = err.attempts;
     throw new AppError(PROVIDER_CODES[err.kind]);
   }
-});
+}, { fallbackManual: true });

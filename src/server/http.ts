@@ -11,7 +11,11 @@ export type ApiContext = {
 type Handler<P> = (req: Request, params: P, ctx: ApiContext) => Promise<Response>;
 
 // Wraps a route handler: stable error envelope for every failure, one metadata log line per request.
-export function api<P extends Record<string, string> = Record<string, string>>(route: string, handler: Handler<P>) {
+export function api<P extends Record<string, string> = Record<string, string>>(
+  route: string,
+  handler: Handler<P>,
+  opts: { fallbackManual?: boolean } = {},
+) {
   return async (req: Request, routeCtx?: { params: Promise<P> }): Promise<Response> => {
     const started = Date.now();
     const requestId = crypto.randomUUID();
@@ -36,7 +40,7 @@ export function api<P extends Record<string, string> = Record<string, string>>(r
       } else {
         errorCode = "INTERNAL_ERROR";
         errorName = err instanceof Error ? err.name : typeof err;
-        response = errorResponse("INTERNAL_ERROR");
+        response = errorResponse("INTERNAL_ERROR", { fallbackManual: opts.fallbackManual });
       }
     }
     logEvent({

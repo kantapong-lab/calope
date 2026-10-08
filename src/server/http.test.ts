@@ -44,6 +44,14 @@ describe("api wrapper", () => {
     log.mockRestore();
   });
 
+  it("adds fallback manual to INTERNAL_ERROR only when the route asks for it", async () => {
+    const boom = async () => {
+      throw new Error("x");
+    };
+    expect((await (await api("POST /a", boom, { fallbackManual: true })(req())).json()).error.fallback).toBe("manual");
+    expect((await (await api("POST /b", boom)(req())).json()).error.fallback).toBeUndefined();
+  });
+
   it("passes route params to the handler", async () => {
     const handler = api<{ id: string }>("DELETE /x/[id]", async (_req, params) => Response.json(params));
     const res = await handler(req(), { params: Promise.resolve({ id: "abc" }) });

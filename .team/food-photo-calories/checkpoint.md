@@ -44,7 +44,9 @@ none
 - devops mode 1: done; mode 2 (3d smoke) not yet run
 - Gate 3c: passed with one waiver. Canvas published (private, owner-only until shared). Contrast measured (AA pass). AC-19/20/21/23/24 have no artboard (non-UI: logging, config, spike, rate-limit backend), so the artboard rule is waived for them. Designer round 2 done.
 - Contract round 2 done (architect); Q1-Q6 answered; B-1 legal (ADR 0002), B-3 dish list (PM) open, non-blocking
-- Gate 3d (smoke, devops mode 2): running now
+- Gate 3d round 1: FAIL (Node 22.14 vs pin 24.21.0). Round 2 handoff repaired (status blocked, B-4 Node, B-5 key)
+- User approved Node 24.21.0 install. Installed via official MSI (SHA256 checked). Rerun checks 1-4 by orchestrator on Node 24.21.0: PASS (clean npm ci, build, /api/health 200 with node v24.21.0)
+- Live Anthropic call still blocked: no ANTHROPIC_API_KEY (B-5, PM). Devops asked to record round 3 handoff
 
 ## History
 - step 1 r1: researcher not-ready; re-verify requested; orchestrator verified core facts with claude-api skill; remaining re-verify deferred to 3d

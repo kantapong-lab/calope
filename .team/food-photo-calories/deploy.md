@@ -67,3 +67,37 @@ Cost control: the smoke makes at most 2 to 4 real model calls total (about $0.01
 2. **Sonnet 5.5 image token cost on a 2000x1500 test image**: measure `usage.input_tokens` (formula gives 72 x 54 = 3,888 visual tokens, within the 4,784 cap, my arithmetic; confirm) and recompute per-request cost against the $0.01 gate (AC-24). Also record the token count at the production 1024 px long edge.
 3. **Bedrock is not used**: no Bedrock config, IAM or AWS infra is prepared. Sonnet 5.5 Bedrock APAC availability (brief item 5) is out of scope unless ADR 0002 legal review rejects the USA transfer, which would supersede ADR 0001 and reopen this file (structured outputs unavailable on Bedrock for Sonnet 5.5).
 4. Re-check at 3d: Vercel body limit and `maxDuration` limits for the actual plan, Anthropic model IDs still current, and any newer Next 16.x patch (pin may move, record it).
+
+## Smoke result (mode 2, gate 3d, round 2)
+
+Date: 2026-10-08. Branch `ops/food-photo-calories`. Local Windows box, Node v22.14.0, npm 11.4.2. Scaffold only (no app features): `package.json`, `package-lock.json`, `tsconfig.json`, `next.config.ts`, `.gitignore`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/api/health/route.ts` (imports real `@anthropic-ai/sdk`, returns booleans only, never values).
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Node matches `.nvmrc` (24.21.0) | **FAIL** | Local Node is v22.14.0. No nvm/fnm/volta installed; Node 24 not installed (system change, not made). `/api/health` reported `node: v22.14.0`. |
+| 2 | `npm install` / `npm ci` with lockfile | Pass (on Node 22) | 67 packages added, 0 vulnerabilities; `npm ci` exit 0. Warn `EBADENGINE` (engines `24.x` vs 22.14), as expected. next 16.4.0, sdk 0.132.1 exact. |
+| 3 | `npm run build` | Pass (on Node 22) | Next.js 16.4.0, compiled, TypeScript passed, routes `/`, `/api/health`, `/_not-found`. Next auto-added `.next/dev/types/**/*.ts` to tsconfig `include`. |
+| 4 | `GET /api/health` on built app (`next start`) | Pass (on Node 22) | HTTP 200 `{"ok":true,"node":"v22.14.0","sdkLoaded":true,"keyPresent":false,"modelPresent":false}`. |
+| 5 | 2000x1500 JPEG size (not gating) | Recorded | 1,228,551 bytes (about 1.17 MiB), quality 85, synthetic gradient plus noise (sharp, scratchpad only). A real photo will differ (roughly 0.3 to 2 MB). Well under the 4.5 MB Vercel body cap. |
+| 6 | Live Anthropic call (not gating) | **blocked: key not provided** | `ANTHROPIC_API_KEY` not set in env. Not requested in chat. Open item for the Human gate; also blocks the Haiku 5.5 and Sonnet 5.5 token measurements (re-verify items 1 and 2). |
+
+Verdict: **FAIL**. Check 1 failed, and checks 2 to 4 ran on the wrong runtime (Node 22), so they show the scaffold builds but do not prove the pinned runtime. Rerun all checks after installing Node 24.21.0 (nvm-windows or fnm, then `nvm use`), expected to pass.
+
+Not run in this round: secret scan of `.next/static`, 5 MB / 300 KB body probe, `maxDuration` acceptance, Vercel Preview build (no Vercel project, no git remote). Still pending for later 3d work.
+
+Open items for the Human gate: (1) install Node 24 locally or approve CI/Vercel Preview as the pin proof; (2) provide `ANTHROPIC_API_KEY` in env (never in chat/files) plus spend cap for check 6; (3) Vercel project and plan tier; (4) legal review ADR 0002 (existing).
+
+## Smoke result (round 3)
+
+Date: 2026-10-08. Rerun on Node v24.21.0 (installed with user approval, default `node`), clean state (node_modules and .next removed, `npm ci`, `npm run build`, `next start`). Run by the Orchestrator; devops re-confirmed `node -v` = v24.21.0.
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Node matches `.nvmrc` 24.21.0 | **Pass** | v24.21.0 |
+| 2 | `npm ci` | **Pass** | 67 packages, 0 vulnerabilities |
+| 3 | `npm run build` | **Pass** | `/` static, `/api/health` dynamic |
+| 4 | `GET /api/health` | **Pass** | 200 `{"ok":true,"node":"v24.21.0","sdkLoaded":true,"keyPresent":false,"modelPresent":false}` |
+| 5 | 2000x1500 JPEG size | Recorded (round 2) | 1,228,551 bytes |
+| 6 | Live Anthropic call | **blocked: key not provided** | `ANTHROPIC_API_KEY` not set; open item B-5 (owner PM) |
+
+Verdict: **Pass** (checks 1 to 4). Named open item for the Human gate: B-5, live call blocked until a key is supplied via env (also blocks the Haiku/Sonnet token measurements). Still pending for later 3d work: secret scan of `.next/static`, body-limit probe, `maxDuration`, Vercel Preview build.

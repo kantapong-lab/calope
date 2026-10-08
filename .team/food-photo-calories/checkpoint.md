@@ -58,3 +58,10 @@ none
 - Architect round 4 done: D4 changed (superseded_at column, not withdrawn_at), D3 shim removed after FE consent.ts merge (B-5, BE)
 - FE asked to fix tests and lint; BE asked for superseded_at and to drop the shim. Both then re-merge
 - Note: sent stray "placeholder" messages to FE twice; FE told to ignore
+- Step 4 done: fe r2 (df28a4d) and be r2 (3adc9fa) merged into feature/food-photo-calories. Combined on Node 24.21.0: npm test 179/179, lint clean, build clean
+- Step 5 done (merge). Step 6 started: code-reviewer on .team/food-photo-calories/diff.patch (c885f6d..HEAD, excluding .team, docs, lockfile)
+- Still open: PM legal (ADR 0002), B-4 (user-typed names), live Anthropic key, Postgres connection for migrations and SQL path
+- Step 6 review 1: APPROVE (0 critical, 0 high, 3 medium, 5 low). Saved review-1.md. Fix round sent before QA: FE (M-1 kcal cap, M-2 fail-closed consent), BE (M-3 sharp limit, L-1 error text and fallback, L-4 lock test), devops (L-2 env example, L-3 data-check wiring)
+- Next: fixes land on fe, be, ops; re-merge feature; then step 7 (qa-tester and docs-writer) and step 8 re-review
+- Review 1 fixes: be 9a34b2c (M-3 sharp limit, L-1 text and fallback, L-4 order test) merged; fe 40afba3 (M-1 kcal cap, M-2 fail-closed consent, L-1 FE) merged into feature (c98b6ad)
+- Waiting: devops r7 (env example, data-check wiring) on ops. Then merge ops into feature, run full check, then code review 2 on fix diff (step 6 round 2), then step 7

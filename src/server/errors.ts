@@ -50,7 +50,7 @@ export const ERROR_SPECS: Record<ErrorCode, ErrorSpec> = {
   },
   INTERNAL_ERROR: {
     status: 500,
-    message_th: "เกิดข้อผิดพลาดของระบบ กรุณาลองอีกครั้งในภายหลัง",
+    message_th: "เกิดข้อผิดพลาดภายในระบบ กรุณาลองอีกครั้ง",
     retryable: true,
   },
 };
@@ -59,6 +59,7 @@ export type ErrorExtras = {
   details?: { path: string; code: string }[];
   required_version?: string;
   retryAfterSec?: number;
+  fallbackManual?: boolean;
 };
 
 export class AppError extends Error {
@@ -77,7 +78,7 @@ export function errorResponse(code: ErrorCode, extras: ErrorExtras = {}): Respon
       code,
       message_th: spec.message_th,
       retryable: spec.retryable,
-      ...(spec.fallback && { fallback: spec.fallback }),
+      ...((spec.fallback || extras.fallbackManual) && { fallback: "manual" as const }),
       ...(extras.details && { details: extras.details }),
       ...(extras.required_version && { required_version: extras.required_version }),
     },

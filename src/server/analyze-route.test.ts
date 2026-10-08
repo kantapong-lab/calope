@@ -195,6 +195,15 @@ describe("POST /api/analyze", () => {
     expect(create).toHaveBeenCalledTimes(2);
   });
 
+  it("returns 500 INTERNAL_ERROR with fallback manual and no exception text on an unexpected fault", async () => {
+    vi.mocked(checkAndRecordAnalysis).mockRejectedValue(new Error("db password leaked"));
+    const res = await POST(request({ photo: asFile(await photoWithExif(100, 100)) }));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toMatchObject({ code: "INTERNAL_ERROR", retryable: true, fallback: "manual" });
+    expect(JSON.stringify(body)).not.toContain("leaked");
+  });
+
   it("returns 504 PROVIDER_TIMEOUT when both attempts time out", async () => {
     create.mockRejectedValue(new Anthropic.APIConnectionTimeoutError());
     const res = await POST(request({ photo: asFile(await photoWithExif(100, 100)) }));

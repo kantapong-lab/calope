@@ -2,6 +2,7 @@ import sharp from "sharp";
 
 export const MAX_UPLOAD_BYTES = 4_000_000;
 const LONG_EDGE_PX = 1024;
+const MAX_INPUT_PIXELS = 40_000_000;
 
 export function detectImageType(bytes: Uint8Array): "jpeg" | "png" | "webp" | null {
   const startsWith = (sig: number[], offset = 0) => sig.every((b, i) => bytes[offset + i] === b);
@@ -13,7 +14,7 @@ export function detectImageType(bytes: Uint8Array): "jpeg" | "png" | "webp" | nu
 
 // sharp drops all metadata (EXIF, GPS, ICC) unless asked to keep it.
 export function processImage(input: Buffer): Promise<Buffer> {
-  return sharp(input)
+  return sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
     .rotate()
     .resize({ width: LONG_EDGE_PX, height: LONG_EDGE_PX, fit: "inside", withoutEnlargement: true })
     .flatten({ background: "#ffffff" })

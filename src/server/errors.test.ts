@@ -14,6 +14,12 @@ describe("errorResponse", () => {
     expect(typeof error.retryable).toBe("boolean");
   });
 
+  it("uses the contract text for INTERNAL_ERROR", async () => {
+    const { error } = await errorResponse("INTERNAL_ERROR").json();
+    expect(error.message_th).toBe("เกิดข้อผิดพลาดภายในระบบ กรุณาลองอีกครั้ง");
+    expect(error.retryable).toBe(true);
+  });
+
   it("maps the contract statuses", () => {
     expect(errorResponse("UNAUTHENTICATED").status).toBe(401);
     expect(errorResponse("BAD_ORIGIN").status).toBe(403);

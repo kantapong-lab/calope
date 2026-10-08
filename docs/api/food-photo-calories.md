@@ -2,7 +2,7 @@
 
 Status: MVP, round 1. Source of truth: `.team/food-photo-calories/contract.md` (C-API-*, C-ERR, C-ORIGIN, C-CONFIG, C-PRIV, C-DATA). Shapes and error text checked against `src/app/api/**`, `src/server/errors.ts`, `src/shared/api-types.ts`, `src/shared/schemas.ts` on branch `docs/food-photo-calories` (same content as `feature/food-photo-calories`).
 
-Verification: unit tests pass (179, Orchestrator run). Live provider calls, live database behaviour (rate-limit advisory lock, consent supersede, persistence) and AC-24 accuracy/latency/cost are **not yet verified** (QA run in progress). Any statement below about those is the intended behaviour from the contract, not a confirmed result.
+Verification: unit tests 187 passed. QA run: 237 passed, 0 failed, 26 skipped (21 need `DATABASE_URL`, 5 not-run stubs). Live provider calls, live database behaviour (rate-limit advisory lock, consent supersede, persistence) and AC-24 accuracy/latency/cost are **not yet verified**: the 21 DB-dependent tests were skipped. Any statement below about those is the intended behaviour from the contract, not a confirmed result.
 
 Health and legal markers: anything marked **PENDING LEGAL REVIEW** must not be treated as final (consent wording, overseas transfer to the USA, provider retention of up to 30 days).
 
@@ -33,7 +33,7 @@ curl -i -X DELETE "https://<app-host>/api/meals?confirm=true" \
 ## Rate limit (C-RATE, AC-13)
 
 - Default: 20 analyses per user per rolling 60 minutes. Configured by `ANALYZE_RATE_LIMIT_PER_HOUR` (see Environment variables).
-- Counted once per `POST /api/analyze` request that passes the Origin, session, consent and file-type checks, before the provider call. Re-estimates (`dish_hint`) count. The provider's internal retry does not count. Invalid files and consent failures do not count.
+- Counted once per `POST /api/analyze` request after the Origin, session, consent, size (413), magic-byte (400) and decode (400) checks, before the provider call. Re-estimates (`dish_hint`) count. The provider's internal retry does not count. Invalid files and consent failures do not count.
 - Exceeded: `429 RATE_LIMITED` with header `Retry-After: <seconds>` (integer, minimum 1, seconds until the oldest counted event leaves the window). No provider call is made.
 - State is in Postgres, so the limit holds across serverless instances. The live lock behaviour is **not yet verified**.
 - Client display: on 429 the front end shows `th.rateLimit.body(minutes)` from `src/copy/th.ts` (minutes = `ceil(Retry-After / 60)`), not `message_th`.
@@ -455,7 +455,7 @@ Every error body has this shape:
 | `CONSENT_REQUIRED` | 403 | false | | ต้องให้ความยินยอมก่อนจึงจะวิเคราะห์รูปได้ |
 | `CONSENT_VERSION_MISMATCH` | 409 | false | | ข้อความความยินยอมมีการอัปเดต กรุณาอ่านและยืนยันอีกครั้ง |
 | `INVALID_FILE_TYPE` | 400 | false | | รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB |
-| `FILE_TOO_LARGE` | 413 | false | | รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB |
+| `FILE_TOO_LARGE` | 413 | false | | ไฟล์ที่ส่งมาใหญ่เกิน 4 MB หลังย่อรูป กรุณาเลือกรูปอื่น (ต้นฉบับต้องไม่เกิน 10 MB) |
 | `RATE_LIMITED` | 429 | false | | วิเคราะห์ครบจำนวนต่อชั่วโมงแล้ว กรุณารอสักครู่ |
 | `PROVIDER_ERROR` | 502 | true | manual | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
 | `PROVIDER_INVALID_OUTPUT` | 502 | false | manual | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
@@ -465,7 +465,7 @@ Every error body has this shape:
 Notes:
 
 - `INTERNAL_ERROR` is the catch-all for unexpected faults. The body has no stack, no exception text and no request data (AC-20).
-- `FILE_TOO_LARGE` and `INVALID_FILE_TYPE` share one message that states the 10 MB limit. The server's own cap is 4,000,000 bytes on the resized upload; the 10 MB limit is enforced on the device before resize. See Known gaps.
+- `FILE_TOO_LARGE` has its own message (R4 text, from `FILE_TOO_LARGE_TH` in `src/server/errors.ts`) that states the 4 MB limit after resize and the 10 MB limit on the original. `INVALID_FILE_TYPE` uses the shared message that states the 10 MB limit. The server's own cap is 4,000,000 bytes on the resized upload; the 10 MB limit is enforced on the device before resize.
 
 ### Front-end strings tied to errors (from `src/copy/th.ts`)
 
@@ -522,14 +522,12 @@ Whether these migrations have been applied to any live database is **not yet ver
 
 ## Known gaps and contract differences
 
-1. `FILE_TOO_LARGE` and `INVALID_FILE_TYPE` messages mention the 10 MB limit, but the server rejects resized uploads above 4,000,000 bytes. The 10 MB rule is applied on the device before resize (contract C-API-ANALYZE constraint). A body above the platform limit gets a platform 413 with no envelope.
-2. Rate limit counting: `checkAndRecordAnalysis` runs before `processImage`. If sharp fails to decode a file that passed the magic-byte check, the request returns `400 INVALID_FILE_TYPE` but the event was already counted. C-RATE says invalid files do not count. Open, for backend.
-3. Check order for the file: the code checks the 4,000,000-byte size (413) before magic bytes (400). C-API-ANALYZE step 3 lists magic bytes first. Only the status for an input that is both too large and the wrong type differs.
-4. `DELETE /api/meals/{id}` returns 404 `NOT_FOUND` for a non-UUID id (contract does not specify this case).
-5. Single-dish limitation: one photo can produce up to 10 dishes, saved as separate unlinked rows.
-6. Dish names: free text only. No dish pick list in MVP (B-3, licensing of a Thai food list).
-7. Login: Google only for MVP (B-2).
-8. Consent text (Thai, `src/shared/consent.ts`) and its legal wording: **PENDING LEGAL REVIEW** (B-1). Blocks release, not build.
-9. Accuracy, latency and cost thresholds (AC-24): **not yet verified**. This document makes no accuracy claim.
+1. `FILE_TOO_LARGE` (R4 text) states the 4 MB limit after resize, but the server rejects resized uploads above 4,000,000 bytes, and the 10 MB limit applies to the original file on the device before resize (contract C-API-ANALYZE constraint). A body above the platform limit gets a platform 413 with no envelope.
+2. `DELETE /api/meals/{id}` returns 404 `NOT_FOUND` for a non-UUID id.
+3. Single-dish limitation: one photo can produce up to 10 dishes, saved as separate unlinked rows.
+4. Dish names: free text only. No dish pick list in MVP (B-3, licensing of a Thai food list).
+5. Login: Google only for MVP (B-2).
+6. Consent text (Thai, `src/shared/consent.ts`) and its legal wording: **PENDING LEGAL REVIEW** (B-1). Blocks release, not build.
+7. Accuracy, latency and cost thresholds (AC-24): **not yet verified**. This document makes no accuracy claim.
 
 Checked and matching the contract: error codes and status values, `message_th` table, consent endpoint shapes and 201/200 rule, meal limits (1..10 items, 5000 kcal caps), `dish_index` requires `dish_hint`, `INTERNAL_ERROR` on `/api/analyze` carries `fallback: "manual"` (`fallbackManual` option in `api()`), health returns only `{"status":"ok"}`, env names.

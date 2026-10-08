@@ -68,7 +68,7 @@ Date: 2026-10-08. Status: draft for release. **Not released.** Consent wording i
 
 ### สถานะการตรวจสอบ (Verification status)
 
-- ผ่านแล้ว: unit tests 179 รายการ, lint, build (Orchestrator รายงาน)
+- ผ่านแล้ว: unit tests 187 รายการ, lint, build (Orchestrator รายงาน); QA 237 ผ่าน, 0 ไม่ผ่าน, ข้าม 26 รายการ (21 รายการต้องใช้ DATABASE_URL, 5 รายการเป็น stub ที่ยังไม่ได้รัน)
 - **ยังไม่ได้ตรวจสอบ:** การเรียกผู้ให้บริการวิเคราะห์จริง, พฤติกรรมฐานข้อมูลจริง (lock ของ rate limit, การ supersede ความยินยอม, การเก็บข้อมูล), ความแม่นยำ/เวลาตอบสนอง/ต้นทุน (AC-24) ไม่มีตัวเลขที่ยืนยันในเอกสารนี้
 - **PENDING LEGAL REVIEW:** ข้อความความยินยอม, การส่งไปสหรัฐอเมริกา, การเก็บรักษาข้อมูลโดยผู้ให้บริการ 30 วัน
 
@@ -121,7 +121,7 @@ Status: **not yet verified against a live database.**
 
 ### Verification status
 
-- Passed: 179 unit tests, lint and build (reported by the Orchestrator).
+- Passed: 187 unit tests, lint and build (reported by the Orchestrator). QA run: 237 passed, 0 failed, 26 skipped (21 need `DATABASE_URL`, 5 not-run stubs).
 - **Not yet verified:** live calls to the model provider; live database behaviour (rate-limit lock, consent supersede, persistence); accuracy, latency and cost (AC-24). No accuracy figures are claimed in these notes.
 - **PENDING LEGAL REVIEW:** consent wording, US transfer, 30-day provider retention.
 

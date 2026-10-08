@@ -7,6 +7,7 @@ import {
   GRAMS_MAX,
   GRAMS_MIN,
   KCAL_MAX,
+  exceedsKcalCap,
   isIntInRange,
   withGrams,
   withManualKcal,
@@ -46,6 +47,7 @@ export function DishEditor({ item, onReestimate, onApply, onCancel }: Props) {
 
   const commitGrams = (grams: number) => {
     if (!isIntInRange(grams, GRAMS_MIN, GRAMS_MAX)) return th.edit.gramsError;
+    if (exceedsKcalCap(draft, grams)) return th.edit.kcalCapError;
     setDraft((d) => withGrams(d, grams));
     return null;
   };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampGrams, confidenceLevel, formatRange, toItem, toMealItem, totals, withGrams, withManualKcal, withRename } from "./meal";
+import { clampGrams, confidenceLevel, exceedsKcalCap, formatRange, toItem, toMealItem, totals, withGrams, withManualKcal, withRename } from "./meal";
 
 const dish = {
   name_th: "ข้าวกะเพราไก่ไข่ดาว",
@@ -64,5 +64,14 @@ describe("save payload (AC-10)", () => {
 
   it("unedited result has edited=false", () => {
     expect(toMealItem(toItem(dish)).edited).toBe(false);
+  });
+});
+
+describe("kcal cap (review M-1)", () => {
+  it("flags a portion whose scaled kcal exceeds 5000 and clamps if applied", () => {
+    const item = toItem(dish);
+    expect(exceedsKcalCap(item, 5000)).toBe(true);
+    expect(exceedsKcalCap(item, 500)).toBe(false);
+    expect(withGrams(item, 5000).kcal_high).toBe(5000);
   });
 });

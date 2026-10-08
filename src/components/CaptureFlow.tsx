@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dish, Meal } from "@/shared/api-types";
 import { th } from "@/copy/th";
 import { ApiError, analyze, getConsent, saveMeals } from "@/lib/client/api";
@@ -18,6 +18,7 @@ import { useToast } from "./Toast";
 
 type Stage =
   | { name: "checking" }
+  | { name: "consentError" }
   | { name: "idle"; rejected?: { code: FileProblem; message: string } }
   | { name: "analysing" }
   | { name: "result"; editing: number | null }
@@ -40,17 +41,24 @@ export function CaptureFlow() {
   const galleryInput = useRef<HTMLInputElement>(null);
 
   // No photo may leave the device before consent (AC-14): gate the capture screen itself.
+  // If the check itself fails, stay closed and offer a retry rather than allowing capture.
+  const checkConsent = useCallback(
+    () =>
+      getConsent().then(
+        (consent) => {
+          if (consent.active) setStage({ name: "idle" });
+          else router.replace(consent.version && !consent.withdrawn_at ? "/consent?updated=1" : "/consent");
+        },
+        (err) => {
+          if (!(err instanceof ApiError && err.code === "UNAUTHENTICATED")) setStage({ name: "consentError" });
+        },
+      ),
+    [router],
+  );
+
   useEffect(() => {
-    getConsent().then(
-      (consent) => {
-        if (consent.active) setStage({ name: "idle" });
-        else router.replace(consent.version && !consent.withdrawn_at ? "/consent?updated=1" : "/consent");
-      },
-      (err) => {
-        if (!(err instanceof ApiError && err.code === "UNAUTHENTICATED")) setStage({ name: "idle" });
-      },
-    );
-  }, [router]);
+    checkConsent();
+  }, [checkConsent]);
 
   function dropPhoto() {
     setPhoto((current) => {
@@ -90,6 +98,8 @@ export function CaptureFlow() {
       case "PROVIDER_ERROR":
       case "PROVIDER_INVALID_OUTPUT":
       case "PROVIDER_TIMEOUT":
+      case "INTERNAL_ERROR":
+        if (err.code === "INTERNAL_ERROR" && err.fallback !== "manual") return false;
         setStage({ name: "fallback", retryable: err.retryable });
         return true;
       default:
@@ -174,6 +184,26 @@ export function CaptureFlow() {
         <p role="status" className="muted">
           {th.loading}
         </p>
+      );
+
+    case "consentError":
+      return (
+        <div role="alert" className="alert alert-danger stack">
+          <p>
+            <strong>{th.consent.checkFailedTitle}</strong>
+          </p>
+          <p>{th.consent.checkFailedBody}</p>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setStage({ name: "checking" });
+              checkConsent();
+            }}
+          >
+            {th.history.retry}
+          </button>
+        </div>
       );
 
     case "idle":

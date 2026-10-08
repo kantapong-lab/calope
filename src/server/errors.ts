@@ -8,6 +8,7 @@ type ErrorSpec = {
 };
 
 const FILE_LIMIT_TH = "รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB";
+const FILE_TOO_LARGE_TH = "ไฟล์ที่ส่งมาใหญ่เกิน 4 MB หลังย่อรูป กรุณาเลือกรูปอื่น (ต้นฉบับต้องไม่เกิน 10 MB)";
 const PROVIDER_TH = "วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้";
 
 export const ERROR_SPECS: Record<ErrorCode, ErrorSpec> = {
@@ -34,7 +35,7 @@ export const ERROR_SPECS: Record<ErrorCode, ErrorSpec> = {
     retryable: false,
   },
   INVALID_FILE_TYPE: { status: 400, message_th: FILE_LIMIT_TH, retryable: false },
-  FILE_TOO_LARGE: { status: 413, message_th: FILE_LIMIT_TH, retryable: false },
+  FILE_TOO_LARGE: { status: 413, message_th: FILE_TOO_LARGE_TH, retryable: false },
   RATE_LIMITED: {
     status: 429,
     message_th: "วิเคราะห์ครบจำนวนต่อชั่วโมงแล้ว กรุณารอสักครู่",

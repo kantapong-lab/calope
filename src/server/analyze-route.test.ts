@@ -161,11 +161,22 @@ describe("POST /api/analyze", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("returns 400 INVALID_FILE_TYPE for a corrupt JPEG and uses no rate-limit slot", async () => {
+    const corrupt = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]);
+    const res = await POST(request({ photo: asFile(corrupt) }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("INVALID_FILE_TYPE");
+    expect(checkAndRecordAnalysis).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("returns 413 FILE_TOO_LARGE above the 4 MB server cap", async () => {
     const big = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(4_000_001)]);
     const res = await POST(request({ photo: asFile(big) }));
     expect(res.status).toBe(413);
-    expect((await res.json()).error.code).toBe("FILE_TOO_LARGE");
+    const { error } = await res.json();
+    expect(error.code).toBe("FILE_TOO_LARGE");
+    expect(error.message_th).toBe("ไฟล์ที่ส่งมาใหญ่เกิน 4 MB หลังย่อรูป กรุณาเลือกรูปอื่น (ต้นฉบับต้องไม่เกิน 10 MB)");
     expect(create).not.toHaveBeenCalled();
   });
 

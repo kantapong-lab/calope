@@ -9,6 +9,7 @@ vi.mock("./consent", () => ({ getConsentStatus: vi.fn() }));
 vi.mock("./rate-limit", () => ({ checkAndRecordAnalysis: vi.fn() }));
 
 Object.assign(process.env, {
+  APP_ORIGIN: "http://localhost",
   ANTHROPIC_API_KEY: "test-key-not-real",
   FOOD_VISION_MODEL: "claude-sonnet-5-5",
   DATABASE_URL: "postgres://unused",

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+process.env.APP_ORIGIN = "http://localhost";
 vi.mock("../shared/consent", () => ({ CONSENT_VERSION: "test-v2" }));
 vi.mock("./auth", () => ({ auth: vi.fn(async () => ({ user: { id: "user-1" } })) }));
 vi.mock("./consent", () => ({ getConsentStatus: vi.fn(), recordConsent: vi.fn(), withdrawConsent: vi.fn() }));

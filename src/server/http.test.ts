@@ -1,22 +1,50 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./auth", () => ({ auth: vi.fn() }));
 
 const { api, assertSameOrigin } = await import("./http");
 const { AppError } = await import("./errors");
 
-const req = (headers: Record<string, string> = {}) => new Request("https://app.example/api/x", { method: "POST", headers });
+// The URL host is deliberately different from every expected host: it must never be used.
+const req = (headers: Record<string, string> = {}) => new Request("http://0.0.0.0:3000/api/x", { method: "POST", headers });
 
 describe("assertSameOrigin", () => {
-  it("allows a matching Origin", () => {
-    expect(() => assertSameOrigin(req({ origin: "https://app.example" }))).not.toThrow();
+  afterEach(() => {
+    delete process.env.APP_ORIGIN;
   });
 
-  it("rejects a missing Origin, a different host, a different port and a malformed Origin", () => {
+  it("passes when Origin matches APP_ORIGIN, ignoring the Host header", () => {
+    process.env.APP_ORIGIN = "http://localhost:3000";
+    expect(() => assertSameOrigin(req({ origin: "http://localhost:3000", host: "other:1" }))).not.toThrow();
+  });
+
+  it("fails when Origin differs from APP_ORIGIN, even if it equals the Host header", () => {
+    process.env.APP_ORIGIN = "http://localhost:3000";
+    expect(() => assertSameOrigin(req({ origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000" }))).toThrow(AppError);
+  });
+
+  it("falls back to the Host header when APP_ORIGIN is unset", () => {
+    expect(() => assertSameOrigin(req({ origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000" }))).not.toThrow();
+    expect(() => assertSameOrigin(req({ origin: "http://localhost:3000", host: "127.0.0.1:3000" }))).toThrow(AppError);
+  });
+
+  it("ignores the req.url host (0.0.0.0:3000 in a container)", () => {
+    expect(() => assertSameOrigin(req({ origin: "http://0.0.0.0:3000", host: "localhost:3000" }))).toThrow(AppError);
+    process.env.APP_ORIGIN = "http://localhost:3000";
+    expect(() => assertSameOrigin(req({ origin: "http://0.0.0.0:3000" }))).toThrow(AppError);
+  });
+
+  it("rejects a missing or malformed Origin and a missing expected host", () => {
+    process.env.APP_ORIGIN = "http://localhost:3000";
     expect(() => assertSameOrigin(req())).toThrow(AppError);
-    for (const origin of ["https://evil.example", "https://app.example:8443", "not a url"]) {
-      expect(() => assertSameOrigin(req({ origin }))).toThrow(AppError);
-    }
+    expect(() => assertSameOrigin(req({ origin: "not a url" }))).toThrow(AppError);
+    delete process.env.APP_ORIGIN;
+    expect(() => assertSameOrigin(req({ origin: "http://localhost:3000" }))).toThrow(AppError);
+  });
+
+  it("rejects a different port", () => {
+    process.env.APP_ORIGIN = "http://localhost:3000";
+    expect(() => assertSameOrigin(req({ origin: "http://localhost:3001" }))).toThrow(AppError);
   });
 });
 

@@ -57,6 +57,19 @@ export function api<P extends Record<string, string> = Record<string, string>>(
   };
 }
 
+// req.url is not used: behind a container or proxy its host is the bind address (e.g. 0.0.0.0:3000).
+function expectedHost(req: Request): string | null {
+  const appOrigin = process.env.APP_ORIGIN;
+  if (appOrigin) {
+    try {
+      return new URL(appOrigin).host;
+    } catch {
+      return null;
+    }
+  }
+  return req.headers.get("host");
+}
+
 export function assertSameOrigin(req: Request): void {
   const origin = req.headers.get("origin");
   let originHost: string | null = null;
@@ -65,7 +78,8 @@ export function assertSameOrigin(req: Request): void {
   } catch {
     // malformed Origin is treated as a mismatch
   }
-  if (originHost !== new URL(req.url).host) throw new AppError("BAD_ORIGIN");
+  const expected = expectedHost(req);
+  if (!originHost || !expected || originHost !== expected) throw new AppError("BAD_ORIGIN");
 }
 
 export async function requireUserId(): Promise<string> {

@@ -51,3 +51,10 @@ none
 ## History
 - step 1 r1: researcher not-ready; re-verify requested; orchestrator verified core facts with claude-api skill; remaining re-verify deferred to 3d
 - setup: git init, base commit c885f6d, vault task note created
+
+## Step 4 progress (orchestrator, latest)
+- Devops r6 done (ops 9029d56: tsx, db scripts, spike, vitest, eslint). fe and be merged ops cleanly
+- feature/food-photo-calories = fe + be merged. On Node 24.21.0: build PASS; npm test 4 failing (ConsentPanel x3, PortionStepper x1); lint 3 errors + 1 warning (FE files)
+- Architect round 4 done: D4 changed (superseded_at column, not withdrawn_at), D3 shim removed after FE consent.ts merge (B-5, BE)
+- FE asked to fix tests and lint; BE asked for superseded_at and to drop the shim. Both then re-merge
+- Note: sent stray "placeholder" messages to FE twice; FE told to ignore

@@ -1,6 +1,6 @@
 # Contract: food-photo-calories
 
-Date: 2026-10-08. Architect round 2 (r1 plus designer Q1-Q6 answers, see C-DESIGN-Q). Inputs: ac.md, brief.md, docs/plan/food-photo-calories.md, ADR 0001 (Accepted), 0002 (Proposed), 0003 (Accepted), deploy.md (devops r1), design.md. New decision record: ADR 0004.
+Date: 2026-10-08. Architect round 4 (r1 plus designer Q1-Q6, frontend-dev Q7, backend deltas D1-D6, see C-DESIGN-Q and C-BE-DELTAS). Inputs: ac.md, brief.md, docs/plan/food-photo-calories.md, ADR 0001 (Accepted), 0002 (Proposed), 0003 (Accepted), deploy.md (devops r1), design.md. New decision record: ADR 0004.
 Every section has a stable id (`C-*`). The `AC id -> section` table is `C-TRACE`.
 
 ## C-STACK Stack and reasons
@@ -86,27 +86,43 @@ Error body, all endpoints:
 ```json
 { "error": { "code": "RATE_LIMITED", "message_th": "...", "retryable": false, "fallback": "manual" } }
 ```
-`message_th` is required in the envelope for every error code, no exceptions (incl. BAD_ORIGIN, BAD_REQUEST, UNAUTHENTICATED, NOT_FOUND). Default Thai text per code lives in `src/server/errors.ts` (BE); FE may refine wording through copy review but the field is always present:
+`message_th` is required in the envelope for every error code, no exceptions (incl. BAD_ORIGIN, BAD_REQUEST, UNAUTHENTICATED, NOT_FOUND, INTERNAL_ERROR). Default Thai text per code lives in `src/server/errors.ts` (BE); FE may refine wording through copy review but the field is always present:
 
-| Code | Default message_th |
-|---|---|
-| UNAUTHENTICATED | กรุณาเข้าสู่ระบบก่อนใช้งาน |
-| BAD_ORIGIN | คำขอนี้ไม่ได้มาจากแอปของเรา กรุณารีเฟรชหน้าแล้วลองอีกครั้ง |
-| BAD_REQUEST | ข้อมูลที่ส่งมาไม่ถูกต้อง กรุณาตรวจสอบแล้วลองอีกครั้ง |
-| NOT_FOUND | ไม่พบรายการนี้ |
-| CONSENT_REQUIRED | ต้องให้ความยินยอมก่อนจึงจะวิเคราะห์รูปได้ |
-| CONSENT_VERSION_MISMATCH | ข้อความความยินยอมมีการอัปเดต กรุณาอ่านและยืนยันอีกครั้ง |
-| INVALID_FILE_TYPE, FILE_TOO_LARGE | รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB |
-| RATE_LIMITED | วิเคราะห์ครบจำนวนต่อชั่วโมงแล้ว กรุณารอสักครู่ |
-| PROVIDER_ERROR, PROVIDER_TIMEOUT, PROVIDER_INVALID_OUTPUT | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
+| Code | Status | Default message_th |
+|---|---|---|
+| UNAUTHENTICATED | 401 | กรุณาเข้าสู่ระบบก่อนใช้งาน |
+| BAD_ORIGIN | 403 | คำขอนี้ไม่ได้มาจากแอปของเรา กรุณารีเฟรชหน้าแล้วลองอีกครั้ง |
+| BAD_REQUEST | 400 | ข้อมูลที่ส่งมาไม่ถูกต้อง กรุณาตรวจสอบแล้วลองอีกครั้ง |
+| NOT_FOUND | 404 | ไม่พบรายการนี้ |
+| CONSENT_REQUIRED | 403 | ต้องให้ความยินยอมก่อนจึงจะวิเคราะห์รูปได้ |
+| CONSENT_VERSION_MISMATCH | 409 | ข้อความความยินยอมมีการอัปเดต กรุณาอ่านและยืนยันอีกครั้ง |
+| INVALID_FILE_TYPE | 400 | รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB |
+| FILE_TOO_LARGE | 413 | รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB |
+| RATE_LIMITED | 429 | วิเคราะห์ครบจำนวนต่อชั่วโมงแล้ว กรุณารอสักครู่ |
+| PROVIDER_ERROR | 502 | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
+| PROVIDER_INVALID_OUTPUT | 502 | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
+| PROVIDER_TIMEOUT | 504 | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
+| INTERNAL_ERROR | 500 | เกิดข้อผิดพลาดภายในระบบ กรุณาลองอีกครั้ง |
 
-`fallback: "manual"` is present when FE must show the manual-entry form (C-API-ANALYZE failures). Statuses: unauthenticated 401 `UNAUTHENTICATED`; cross-origin mutation 403 `BAD_ORIGIN`; malformed body 400 `BAD_REQUEST` with `details` (zod issues, no user content echoed).
+`INTERNAL_ERROR` is the generic catch-all for unexpected server faults: body has only `code`, `message_th`, `retryable: true`; no stack, no message text from the exception, no request data (AC-20). Any route that catches an unknown error returns it. On `/api/analyze` it also carries `fallback: "manual"`.
+
+`fallback: "manual"` is present when FE must show the manual-entry form (C-API-ANALYZE failures). Malformed body 400 `BAD_REQUEST` carries `details` (zod issues, no user content echoed).
+
+Check order for mutating routes: origin check (C-ORIGIN) first, then session (401), then route-specific steps.
+
+## C-ORIGIN Origin check on mutating requests
+
+Applies to every `POST`, `PUT`, `PATCH`, `DELETE` under `/api/**` except `/api/auth/**` (Auth.js has its own CSRF protection). `GET` is not checked.
+- The `Origin` header must be present and its host must equal the request host. Missing or different: 403 `BAD_ORIGIN`.
+- Runs before the session check, so it needs no DB and gives no information about auth state.
+- Reason: browsers always send `Origin` on non-GET fetches, so a missing header means a non-browser or forged client; the cookie is SameSite=Lax as a second layer.
+- Consequence for test tools: curl, smoke scripts and Playwright API calls must send `Origin` equal to the target host (devops smoke, qa-tester).
 
 ## C-API-ANALYZE POST /api/analyze
 
 Covers AC-1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 19, 20, 21. Route file `src/app/api/analyze/route.ts`, `export const runtime = "nodejs"`, `export const maxDuration = 60`.
 
-Auth: session required. Mutating-route origin check: `Origin` header host must equal request host.
+Auth: origin check (C-ORIGIN), then session required.
 
 Request: `multipart/form-data`
 | Field | Type | Rule |
@@ -116,7 +132,7 @@ Request: `multipart/form-data`
 | `dish_index` | text (integer) | Optional, 0..9, default 0. Valid only together with `dish_hint` (else 400 `BAD_REQUEST`). States which dish of the previous result the client is replacing. The server does not use it for analysis; it echoes it in the 200 response so FE replaces the right dish. |
 
 Server steps, in order:
-1. Session check (401).
+1. Origin check, then session check (401).
 2. Active consent for current `CONSENT_VERSION` (403 `CONSENT_REQUIRED`). Checked before the body is read.
 3. Parse multipart; detect type by magic bytes (JPEG `FFD8FF`, PNG `89504E47`, WebP `RIFF....WEBP`), not by declared content type. Reject (400 `INVALID_FILE_TYPE`) before any provider call. Size over cap: 413 `FILE_TOO_LARGE`. Both messages state the limit in Thai (JPEG/PNG/WebP, ไม่เกิน 10 MB).
 4. Rate limit check and record (C-RATE). 429 `RATE_LIMITED` with `Retry-After` seconds.
@@ -134,6 +150,7 @@ Responses:
 | 403 | `CONSENT_REQUIRED`, `BAD_ORIGIN` | |
 | 413 | `FILE_TOO_LARGE` | |
 | 429 | `RATE_LIMITED` | |
+| 500 | `INTERNAL_ERROR` (`fallback: "manual"`) | Unexpected server fault. |
 | 502 | `PROVIDER_ERROR` (`retryable: true`, `fallback: "manual"`) | Fatal provider error, or retryable error persisted after the one retry (AC-11). |
 | 502 | `PROVIDER_INVALID_OUTPUT` (`fallback: "manual"`) | Two invalid outputs (AC-12). |
 | 504 | `PROVIDER_TIMEOUT` (`retryable: true`, `fallback: "manual"`) | Both attempts timed out. |
@@ -142,25 +159,25 @@ Constraint on AC-1 (non-blocking, flagged to devops): a body above the platform 
 
 ## C-API-CONSENT Consent endpoints
 
-Covers AC-14, 15, 16, 18. Files `src/app/api/consent/route.ts`. Auth required on all.
+Covers AC-14, 15, 16, 18. Files `src/app/api/consent/route.ts`. Auth required on all; origin check on POST and DELETE.
 
-Current version constant `CONSENT_VERSION` (string, e.g. `2026-10-v1`) and the Thai consent text live together in `src/shared/consent.ts` (FE owns; BE imports the constant). A text change bumps the version in the same file, which forces re-consent.
+Current version constant `CONSENT_VERSION` (string, e.g. `2026-10-v1`) and the Thai consent text live together in `src/shared/consent.ts` (FE owns; BE imports the constant). A text change bumps the version in the same file, which forces re-consent. BE file `src/server/consent-version.ts` may exist only as a transitional re-export of that constant until FE's file is merged; then it is deleted and BE imports `src/shared/consent.ts` directly (D3).
 
-- `GET /api/consent` -> 200 `{ required_version, active: boolean, version: string|null, consented_at: string|null, withdrawn_at: string|null }`. `active` is true only if the user has a record with `withdrawn_at` null and `version == required_version`.
-- `POST /api/consent` body `{ "version": string, "accepted": true }` -> 201 with the same shape as GET (new record). If an active record for that version exists: 200, no new row. Errors: 400 `BAD_REQUEST` (`accepted` not literally `true`), 409 `CONSENT_VERSION_MISMATCH` (client sent an old version; includes `required_version`). FE sends this only after the user ticks an initially unticked box (AC-15); the server cannot see the checkbox, so QA tests the UI for no pre-tick and no bundling.
-- `DELETE /api/consent` (withdraw) -> 200 same shape with `active:false`, `withdrawn_at` set. No active record: 200, no change (idempotent). Records are never deleted by withdrawal (audit, AC-18).
+- `GET /api/consent` -> 200 `{ required_version, active: boolean, version: string|null, consented_at: string|null, withdrawn_at: string|null }`. `active` is true only if the user has a record with `withdrawn_at` null, `superseded_at` null and `version == required_version`.
+- `POST /api/consent` body `{ "version": string, "accepted": true }` -> 201 with the same shape as GET (new record). If an active record for that version exists: 200, no new row. If an open record for an older version exists, the same transaction sets its `superseded_at = now()` (not `withdrawn_at`) and inserts the new row (D4). Errors: 400 `BAD_REQUEST` (`accepted` not literally `true`), 409 `CONSENT_VERSION_MISMATCH` (client sent an old version; includes `required_version`). FE sends this only after the user ticks an initially unticked box (AC-15); the server cannot see the checkbox, so QA tests the UI for no pre-tick and no bundling.
+- `DELETE /api/consent` (withdraw) -> 200 same shape with `active:false`, `withdrawn_at` set on the open record. No open record: 200, no change (idempotent). Records are never deleted by withdrawal (audit, AC-18).
 
 Consent and manual entry: saving a manual meal needs no consent (no transfer, ADR 0002).
 
 ## C-API-MEALS Meal log endpoints
 
-Covers AC-8 (persisted result), 9, 10, 11 (manual save), 17. File `src/app/api/meals/route.ts`, `src/app/api/meals/[id]/route.ts`. Auth required.
+Covers AC-8 (persisted result), 9, 10, 11 (manual save), 17. File `src/app/api/meals/route.ts`, `src/app/api/meals/[id]/route.ts`. Auth required; origin check on POST and DELETE.
 
 Types:
 ```ts
 type MealItemIn = {
   dish_name_th: string;        // 1..120
-  dish_name_en?: string|null;  // 0..120
+  dish_name_en?: string|null;  // 0..120; null when the user typed the dish name (see rename rule)
   portion_grams: number;       // integer 1..5000
   kcal_low: number;            // integer 0..5000
   kcal_high: number;           // integer >= kcal_low, <= 5000
@@ -170,16 +187,18 @@ type MealItemIn = {
 type Meal = MealItemIn & { id: string /*uuid*/, created_at: string /*ISO*/ };
 ```
 - `POST /api/meals` body `{ "items": MealItemIn[] }` (1..10, one row per dish) -> 201 `{ "items": Meal[] }`. Rows created in one transaction; `created_at` set by server. Errors: 400 `BAD_REQUEST`, 401, 403 `BAD_ORIGIN`.
-- Manual entry: FE sends `source:"manual"`, `kcal_low == kcal_high == user value`. This is the user's own entry, not an estimate. Display stays a range "N - N" (Q4) so the UI is consistent with AC-5; FE may label it as the user's entry.
+- Manual entry: FE sends `source:"manual"`, `dish_name_en: null`, `kcal_low == kcal_high == user value`. This is the user's own entry, not an estimate. Display stays a range "N - N" (Q4) so the UI is consistent with AC-5; FE may label it as the user's entry.
 - `GET /api/meals?limit=<1..50, default 20>&before=<ISO>` -> 200 `{ "items": Meal[], "next_before": string|null }`, newest first, only the caller's rows.
 - `DELETE /api/meals/{id}` -> 204. Not found or not owner: 404 `NOT_FOUND`. Hard delete.
 - `DELETE /api/meals?confirm=true` -> 204, hard-deletes all of the caller's meal rows (AC-17 "all food data"). Missing `confirm`: 400 `BAD_REQUEST`. Consent records are kept for audit (AC-18); no photos exist to delete (ADR 0002).
 
-Proportional recalc (AC-9) is client-side with no API call: `kcal' = round(kcal * newGrams / baseGrams)` for both low and high, `baseGrams` = grams of the dish in the last analysis result. Serving count is converted to grams by FE (`servings * baseGrams`). Rename without re-estimate keeps the numbers and sets `edited=true`; re-estimate calls C-API-ANALYZE with `dish_hint` and `dish_index`.
+Proportional recalc (AC-9) is client-side with no API call: `kcal' = round(kcal * newGrams / baseGrams)` for both low and high, `baseGrams` = grams of the dish in the last analysis result. Serving count is converted to grams by FE (`servings * baseGrams`).
+
+Rename rule (Q7). When the user renames a dish without re-estimating, FE sets `dish_name_th` to the typed text, sets `dish_name_en` to `null`, keeps the kcal numbers and sets `edited=true`. FE never keeps a stale English name next to a new Thai name. A re-estimate (C-API-ANALYZE with `dish_hint` and `dish_index`) returns fresh `name_th` and `name_en` from the model and replaces both. `dish_name_en` is already nullable, so no API change. QA tests that a renamed, non-re-estimated item is saved with `dish_name_en = null`.
 
 ## C-API-HEALTH GET /api/health
 
-For devops smoke (deploy.md). No auth. 200 `{ "status": "ok" }`. Does not call the provider or read the key. File `src/app/api/health/route.ts` (BE).
+For devops smoke (deploy.md). No auth, no origin check (GET). 200 `{ "status": "ok" }` and nothing else: no Node version, no env names or values, no key presence, no DB detail (AC-19, D6). Does not call the provider or read the key. File `src/app/api/health/route.ts` (BE). Devops smoke gets runtime versions from `node -v` and `next -v`, not from this route.
 
 ## C-API-AUTH Auth routes
 
@@ -187,7 +206,7 @@ For devops smoke (deploy.md). No auth. 200 `{ "status": "ok" }`. Does not call t
 
 ## C-DATA Schema and migrations
 
-Migration `db/migrations/0001_init.sql` generated by drizzle-kit from `src/server/db/schema.ts` (BE). Every migration must be backward compatible with the previous deployment (deploy.md rollback rule).
+First migration is `db/migrations/0000_init.sql` (drizzle-kit default numbering, D2), generated from `src/server/db/schema.ts` (BE). Later migrations follow as `0001_*`, and so on. Every migration must be backward compatible with the previous deployment (deploy.md rollback rule). If `0000_init` was already applied anywhere when D4 landed, the `superseded_at` column ships as a new additive migration instead of editing `0000`.
 
 ```sql
 -- users, accounts: created by the Auth.js Drizzle adapter schema (JWT sessions: no sessions table)
@@ -196,9 +215,11 @@ create table consent_records (
   user_id       uuid not null references users(id) on delete cascade,
   version       text not null,
   consented_at  timestamptz not null default now(),
-  withdrawn_at  timestamptz
+  withdrawn_at  timestamptz,   -- set only when the user withdraws
+  superseded_at timestamptz    -- set only when a newer version's consent replaces this row
 );
-create unique index consent_one_active_per_user on consent_records (user_id) where withdrawn_at is null;
+create unique index consent_one_open_per_user on consent_records (user_id)
+  where withdrawn_at is null and superseded_at is null;
 
 create table meal_logs (
   id            uuid primary key default gen_random_uuid(),
@@ -236,6 +257,7 @@ Covers AC-2, 14, 15, 16, 17, 18, 23.
 - Consent gate is in two places: FE blocks capture/upload until `GET /api/consent` shows `active` (no photo leaves the device before consent, AC-14); BE refuses analysis without active consent (C-API-ANALYZE step 2).
 - Consent screen text (FE, `src/shared/consent.ts`, Thai) must name Anthropic as processor, state transfer outside Thailand to the USA, purpose, provider retention (up to 30 days, ADR 0002), the right to withdraw and delete. Legal review of the wording is B-1 (owner PM).
 - Withdraw (AC-16): `DELETE /api/consent`; FE then blocks analysis until re-consent.
+- Consent history (AC-15, AC-18): each consent is its own row; a new version closes the old row with `superseded_at`, a user withdrawal closes it with `withdrawn_at`. The audit trail can tell the two apart.
 - Photos: processed per request, never persisted, not logged (C-LOG). No storage bucket, no CDN, no thumbnail.
 - AC-23: no Thai FCD or THFOOD data in repo or build. No static dish list is shipped (Q1). CI check `scripts/check-no-thai-food-data.mjs` (devops wires, BE writes patterns): fails on files or paths matching `thfood`, `thaifcd`, `fcd` data extensions under the repo. Evaluation data lives outside the repo (`SPIKE_DATA_DIR`).
 
@@ -243,6 +265,7 @@ Covers AC-2, 14, 15, 16, 17, 18, 23.
 
 - Logger `src/server/log.ts` (BE) accepts only a typed metadata object (request_id, user id hash, route, status, latency_ms, token counts, error code). No generic `log(any)`.
 - Request bodies and provider request/response payloads are never logged. SDK debug logging stays off: `ANTHROPIC_LOG` unset, no custom `logger`/`fetch` wrapper that prints bodies.
+- `INTERNAL_ERROR` handling logs the error code and request_id only, not the exception message or stack text that could carry request data.
 - A unit test runs `analyzeFood` and the route with a fake image containing a marker and asserts the marker and any base64 of it are absent from all captured console output.
 
 ## C-FE-CLIENT Client behaviour (FE)
@@ -251,10 +274,10 @@ Covers AC-1, 3, 6, 8, 9, 14, 22. Files under `src/lib/client/`.
 - Pre-checks on the original file: type JPEG/PNG/WebP, size <= 10 MB; otherwise a Thai message stating the limit and no network call (AC-1).
 - Resize with `createImageBitmap(file, { imageOrientation: "from-image" })` then Canvas to JPEG q0.85, long edge <= 1024 (never enlarge). Canvas re-encode drops EXIF/GPS (AC-2, AC-3).
 - Keep the resized Blob in component state only, for re-estimate; never write it to localStorage, IndexedDB or the server except via C-API-ANALYZE.
-- Dish rename is free text only in MVP (Q1).
+- Dish rename is free text only in MVP (Q1). On rename without re-estimate, clear `name_en` (C-API-MEALS rename rule, Q7).
 - Not-medical-advice disclaimer (Thai) renders on every screen that shows an estimate or saved range, visible or one tap away on the same screen (AC-6). Copy in `src/copy/th.ts`.
 - Calories shown only as `low - high kcal` (also when equal, "N - N"), with confidence label (derived from `confidence`: >= 0.75 high, >= 0.5 medium, else low) and assumptions list. No component renders a single estimate number (AC-5).
-- Dish names render Thai plus English (AC-22); all UI strings Thai from `src/copy/th.ts`.
+- Dish names render Thai plus English when an English name exists (AC-22); a user-typed name shows Thai only; all UI strings Thai from `src/copy/th.ts`.
 
 ## C-SPIKE Accuracy spike support (AC-24)
 
@@ -267,7 +290,7 @@ One owner per file. Others read only; changes go through the owner via the Orche
 | Owner | Files |
 |---|---|
 | devops | `.nvmrc`, `vercel.json`, `.env.example`, `package.json`, `package-lock.json`, `next.config.ts`, `tsconfig.json`, `eslint.config.*`, `.gitignore`, `.github/workflows/*`, `smoke/**`, Vercel project and env settings, DB provisioning |
-| BE | `src/app/api/**`, `src/server/**` (config, vision, db, auth, rate-limit, log, errors), `src/instrumentation.ts`, `src/shared/api-types.ts`, `src/shared/schemas.ts`, `db/migrations/**`, `scripts/**`, BE unit tests `src/server/**/*.test.ts` |
+| BE | `src/app/api/**`, `src/server/**` (config, vision, db, auth, rate-limit, log, errors, origin, consent-version re-export until D3 removal), `src/instrumentation.ts`, `src/shared/api-types.ts`, `src/shared/schemas.ts`, `db/migrations/**`, `scripts/**`, BE unit tests `src/server/**/*.test.ts` |
 | FE | `src/app/(app)/**` (capture, result, edit, meals, settings pages), `src/app/signin/**`, `src/app/layout.tsx`, `src/app/globals.css`, `src/components/**`, `src/lib/client/**`, `src/copy/th.ts`, `src/shared/consent.ts`, FE unit tests next to FE files |
 | qa-tester | `tests/e2e/**`, `tests/fixtures/**` |
 | designer | `design.md` only |
@@ -285,27 +308,27 @@ Dependencies: FE and BE name needed packages to devops (Orchestrator relays); de
 | AC-5 | C-FE-CLIENT, C-SCHEMA-OUT | Range-only rendering rule, "N - N" when equal |
 | AC-6 | C-FE-CLIENT | Disclaimer on every estimate screen |
 | AC-7 | C-API-ANALYZE (200 is_food=false), C-FE-CLIENT | No kcal returned; manual entry offered |
-| AC-8 | C-API-ANALYZE (`dish_hint`, `dish_index`), C-API-MEALS, C-DESIGN-Q | Free-text rename, re-estimate or manual kcal; pick list is B-3 |
+| AC-8 | C-API-ANALYZE (`dish_hint`, `dish_index`), C-API-MEALS (rename rule), C-DESIGN-Q | Free-text rename, re-estimate or manual kcal; pick list is B-3 |
 | AC-9 | C-API-MEALS (proportional recalc) | Client-side, no provider call |
 | AC-10 | C-API-MEALS POST, C-DATA meal_logs | Dish, grams, kcal range, edited, created_at |
-| AC-11 | C-VISION (retry), C-API-ANALYZE (502/504, `fallback:"manual"`), C-API-MEALS (manual save) | One retry then manual form |
+| AC-11 | C-VISION (retry), C-API-ANALYZE (500/502/504, `fallback:"manual"`), C-API-MEALS (manual save), C-ERR | One retry then manual form |
 | AC-12 | C-VISION steps 3-4, C-SCHEMA-OUT | zod validation, shared single retry |
 | AC-13 | C-RATE, C-API-ANALYZE step 4 | 20/h, 429, no provider call |
 | AC-14 | C-PRIV, C-API-CONSENT, C-API-ANALYZE step 2 | FE gate plus BE 403 |
-| AC-15 | C-API-CONSENT, C-PRIV | Consent text in `src/shared/consent.ts`; unticked explicit action |
-| AC-16 | C-API-CONSENT DELETE | Withdraw with timestamp, analysis blocked |
+| AC-15 | C-API-CONSENT, C-PRIV, C-DATA | Consent text in `src/shared/consent.ts`; unticked explicit action; version history via `superseded_at` |
+| AC-16 | C-API-CONSENT DELETE, C-DATA | Withdraw with `withdrawn_at`, analysis blocked |
 | AC-17 | C-API-MEALS DELETE | Hard delete one or all; no photo exists |
-| AC-18 | C-API-CONSENT, C-DATA consent_records | version, consented_at, user_id; kept on withdrawal |
-| AC-19 | C-CONFIG, C-VISION, C-OWN | Key server-only; one provider module; secret scan in smoke |
-| AC-20 | C-LOG | Typed logger, SDK debug off, marker test |
+| AC-18 | C-API-CONSENT, C-DATA consent_records | version, consented_at, user_id; kept on withdrawal and supersession |
+| AC-19 | C-CONFIG, C-VISION, C-OWN, C-API-HEALTH | Key server-only; one provider module; health reveals nothing; secret scan in smoke |
+| AC-20 | C-LOG, C-ERR | Typed logger, SDK debug off, marker test, no exception text |
 | AC-21 | C-CONFIG, C-VISION | FOOD_VISION_MODEL validated at startup; request key allowlist test |
-| AC-22 | C-FE-CLIENT, C-SCHEMA-OUT, C-ERR | Thai copy file and message_th, Thai + English names |
+| AC-22 | C-FE-CLIENT, C-SCHEMA-OUT, C-ERR, C-API-MEALS (rename rule) | Thai copy file and message_th; Thai + English names for model-provided names; user-typed names Thai only (Q7) |
 | AC-23 | C-PRIV | CI pattern check, no data and no static dish list in repo |
 | AC-24 | C-SPIKE | Spike script, per-model run, 2000x1500 token check |
 
-Brief item to section: Must 1 -> C-API-MEALS; Must 2 -> C-SCHEMA-OUT, C-FE-CLIENT; Must 3 -> C-FE-CLIENT; Must 4 -> C-API-ANALYZE; Must 5 -> C-API-CONSENT, C-PRIV; Must 6 -> C-RATE, C-CONFIG, C-LOG; Must 7 -> C-VISION, C-API-ANALYZE; Must 8 -> C-FE-CLIENT; Must 9 -> C-PRIV; Runtime pin -> C-STACK, C-CONFIG, C-VISION; Spike -> C-SPIKE.
+Brief item to section: Must 1 -> C-API-MEALS; Must 2 -> C-SCHEMA-OUT, C-FE-CLIENT; Must 3 -> C-FE-CLIENT; Must 4 -> C-API-ANALYZE; Must 5 -> C-API-CONSENT, C-PRIV; Must 6 -> C-RATE, C-CONFIG, C-LOG, C-ORIGIN; Must 7 -> C-VISION, C-API-ANALYZE; Must 8 -> C-FE-CLIENT; Must 9 -> C-PRIV; Runtime pin -> C-STACK, C-CONFIG, C-VISION; Spike -> C-SPIKE.
 
-## C-DESIGN-Q Answers to designer round 2 questions (design.md lines 94-99)
+## C-DESIGN-Q Answers to designer round 2 questions (design.md lines 94-99) and frontend-dev Q7
 
 | Q | Decision | Reason |
 |---|---|---|
@@ -315,11 +338,25 @@ Brief item to section: Must 1 -> C-API-MEALS; Must 2 -> C-SCHEMA-OUT, C-FE-CLIEN
 | Q4 equal low and high | Keep range form "N - N" everywhere, including manual entries. | One consistent display, satisfies AC-5 literally. |
 | Q5 no account name field | Out of MVP; settings shows no name. | No AC needs it. |
 | Q6 message_th missing on some codes | `message_th` required for every error code (C-ERR table). | FE never needs a code-to-text fallback. |
+| Q7 stale `name_en` after rename without re-estimate | FE clears `name_en` to `null` on rename (saved as `dish_name_en = null`); a re-estimate refreshes both names. No new API field. AC-22 holds for model-provided names; a user-typed name shows Thai only (B-4). | A wrong English name is worse than none; the field is already nullable. |
+
+## C-BE-DELTAS Backend round 1 deltas (be/food-photo-calories 53d8dfe)
+
+| # | Delta | Decision | Reason |
+|---|---|---|---|
+| D1 | `INTERNAL_ERROR` 500 added | Accepted as a generic 500 with `message_th`, `retryable: true`, no exception text (C-ERR). | Every route needs a safe catch-all; same envelope as other errors. |
+| D2 | Migration is `0000_init.sql` | Accepted; contract text updated (C-DATA). | drizzle-kit default numbering; name has no other meaning. |
+| D3 | `src/server/consent-version.ts` re-exports FE's `CONSENT_VERSION` | Accepted as a transitional re-export only. BE deletes it and imports `src/shared/consent.ts` directly once FE's file is merged; code-reviewer checks it is gone before release. | One owner per file: the constant belongs to FE's consent file, so a second copy must not live on. |
+| D4 | New-version consent sets `withdrawn_at` on the old active row | Changed. Not acceptable as built: `withdrawn_at` would record a withdrawal the user never made, which breaks AC-16/AC-18 audit meaning. Use a new nullable `superseded_at` column; the one-open-row index covers both columns (C-DATA, C-API-CONSENT). | Audit must distinguish "user withdrew" from "text version replaced". Small additive change. |
+| D5 | Strict origin check, missing Origin = 403 `BAD_ORIGIN`, before the session check | Confirmed, now specified in C-ORIGIN: non-GET methods only, `/api/auth/**` excluded. | Browsers always send Origin on non-GET; cheap, no DB; test tools must send Origin. |
+| D6 | Health returns only `{"status":"ok"}` | Confirmed (C-API-HEALTH). | AC-19: no key or env info; versions come from smoke commands. |
 
 ## C-OPEN Open items
 
 - B-1 (PM): legal review of ADR 0002 consent wording and USA transfer. Does not block build; blocks release.
 - B-2 (PM): confirm login provider (Google for MVP). Needed before BE wires auth.
 - B-3 (PM): dish pick list for AC-8 needs a licensed source; MVP ships free text only. Non-blocking.
-- Non-blocking: platform body limit vs AC-1 (see C-API-ANALYZE); devops smoke posts 5 MB (expect platform 413) and 300 KB (expect 200). deploy.md smoke names `POST /api/analyze`: this contract uses the same path.
+- B-4 (PM): confirm that user-typed dish names showing Thai only satisfies AC-22 (Q7). Non-blocking.
+- B-5 (BE): implement D4 (`superseded_at`) and delete the D3 re-export. Fix round for BE, small.
+- Non-blocking: platform body limit vs AC-1 (see C-API-ANALYZE); devops smoke posts 5 MB (expect platform 413) and 300 KB (expect 200), and all smoke and QA API calls must send an `Origin` header (C-ORIGIN). deploy.md smoke names `POST /api/analyze`: this contract uses the same path.
 - deploy.md risk 4 (persistent store) is resolved by ADR 0004 (Postgres); devops provisions it.

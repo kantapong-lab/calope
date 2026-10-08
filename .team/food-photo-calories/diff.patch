@@ -1,18 +1,55 @@
 diff --git a/.env.example b/.env.example
 new file mode 100644
-index 0000000..eec96db
+index 0000000..2b7f1b6
 --- /dev/null
 +++ b/.env.example
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,21 @@
 +# Names only. Never commit real values. Set real values in Vercel Project Settings > Environment Variables
 +# (scope Preview/staging and Production separately) and in a git-ignored .env.local for local dev.
 +# Server-side only: never prefix with NEXT_PUBLIC_ (that would ship the value to the client bundle, breaks AC-19).
 +
-+# Anthropic API key (server-side only, used by the backend route handler)
++# Anthropic API key (server-side only, used by the backend route handler). Required.
 +ANTHROPIC_API_KEY=
 +
 +# Exact model ID, no alias (AC-21). Default: claude-sonnet-5-5. Spike candidate: claude-haiku-5-5
-+FOOD_VISION_MODEL=
++FOOD_VISION_MODEL=claude-sonnet-5-5
++
++# Postgres connection string (Vercel Marketplace provider, Neon expected). Required.
++DATABASE_URL=
++
++# Auth.js v5 (generate AUTH_SECRET with: npx auth secret). Google OAuth client from Google Cloud Console. Required.
++AUTH_SECRET=
++AUTH_GOOGLE_ID=
++AUTH_GOOGLE_SECRET=
++
++# Analyze limits (optional, shown with their defaults)
++ANALYZE_RATE_LIMIT_PER_HOUR=20
++ANALYZE_ATTEMPT_TIMEOUT_MS=22000
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..05a25ff
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,19 @@
++name: ci
++on:
++  push:
++  pull_request:
++
++jobs:
++  check:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with:
++          node-version-file: .nvmrc
++          cache: npm
++      - run: npm ci
++      - run: npm run check:data
++      - run: npm run lint
++      - run: npm test
++      - run: npm run build
 diff --git a/.gitignore b/.gitignore
 new file mode 100644
 index 0000000..cd04deb
@@ -1140,10 +1177,10 @@ index 0000000..cb651cd
 +export default nextConfig;
 diff --git a/package.json b/package.json
 new file mode 100644
-index 0000000..da12cef
+index 0000000..c53e7c7
 --- /dev/null
 +++ b/package.json
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,48 @@
 +{
 +  "name": "calope",
 +  "version": "0.0.0",
@@ -1159,7 +1196,8 @@ index 0000000..da12cef
 +    "lint": "eslint .",
 +    "db:generate": "drizzle-kit generate --config=scripts/drizzle.config.ts",
 +    "db:migrate": "drizzle-kit migrate --config=scripts/drizzle.config.ts",
-+    "spike": "tsx --conditions react-server scripts/spike/run-spike.ts"
++    "spike": "tsx --conditions react-server scripts/spike/run-spike.ts",
++    "check:data": "node scripts/check-no-thai-food-data.mjs"
 +  },
 +  "dependencies": {
 +    "@anthropic-ai/sdk": "0.132.1",
@@ -1193,7 +1231,7 @@ index 0000000..da12cef
 +}
 diff --git a/scripts/check-no-thai-food-data.mjs b/scripts/check-no-thai-food-data.mjs
 new file mode 100644
-index 0000000..3a7c8ed
+index 0000000..8113689
 --- /dev/null
 +++ b/scripts/check-no-thai-food-data.mjs
 @@ -0,0 +1,32 @@
@@ -1201,7 +1239,7 @@ index 0000000..3a7c8ed
 +import { readdirSync } from "node:fs";
 +import { join, relative } from "node:path";
 +
-+const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".vercel", ".team", ".claude", "docs"]);
++const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".vercel", ".team", ".claude"]);
 +const PATH_PATTERN = /thfood|thai[-_ ]?fcd|(^|[\\/._-])fcd([\\/._-]|$)/i;
 +const DATA_EXTENSIONS = /\.(csv|xlsx?|json|sqlite3?|db|parquet|tsv)$/i;
 +
@@ -1433,7 +1471,7 @@ index 0000000..f063e17
 +}
 diff --git a/src/app/api/analyze/route.ts b/src/app/api/analyze/route.ts
 new file mode 100644
-index 0000000..8ac3762
+index 0000000..5fa3336
 --- /dev/null
 +++ b/src/app/api/analyze/route.ts
 @@ -0,0 +1,82 @@
@@ -1518,7 +1556,7 @@ index 0000000..8ac3762
 +    ctx.extra.attempts = err.attempts;
 +    throw new AppError(PROVIDER_CODES[err.kind]);
 +  }
-+});
++}, { fallbackManual: true });
 diff --git a/src/app/api/auth/[...nextauth]/route.ts b/src/app/api/auth/[...nextauth]/route.ts
 new file mode 100644
 index 0000000..6ef2121
@@ -2246,15 +2284,15 @@ index 0000000..10aec56
 +}
 diff --git a/src/components/CaptureFlow.tsx b/src/components/CaptureFlow.tsx
 new file mode 100644
-index 0000000..ae5120c
+index 0000000..f163220
 --- /dev/null
 +++ b/src/components/CaptureFlow.tsx
-@@ -0,0 +1,312 @@
+@@ -0,0 +1,342 @@
 +"use client";
 +
 +import Link from "next/link";
 +import { useRouter } from "next/navigation";
-+import { useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useRef, useState } from "react";
 +import type { Dish, Meal } from "@/shared/api-types";
 +import { th } from "@/copy/th";
 +import { ApiError, analyze, getConsent, saveMeals } from "@/lib/client/api";
@@ -2270,6 +2308,7 @@ index 0000000..ae5120c
 +
 +type Stage =
 +  | { name: "checking" }
++  | { name: "consentError" }
 +  | { name: "idle"; rejected?: { code: FileProblem; message: string } }
 +  | { name: "analysing" }
 +  | { name: "result"; editing: number | null }
@@ -2292,17 +2331,24 @@ index 0000000..ae5120c
 +  const galleryInput = useRef<HTMLInputElement>(null);
 +
 +  // No photo may leave the device before consent (AC-14): gate the capture screen itself.
++  // If the check itself fails, stay closed and offer a retry rather than allowing capture.
++  const checkConsent = useCallback(
++    () =>
++      getConsent().then(
++        (consent) => {
++          if (consent.active) setStage({ name: "idle" });
++          else router.replace(consent.version && !consent.withdrawn_at ? "/consent?updated=1" : "/consent");
++        },
++        (err) => {
++          if (!(err instanceof ApiError && err.code === "UNAUTHENTICATED")) setStage({ name: "consentError" });
++        },
++      ),
++    [router],
++  );
++
 +  useEffect(() => {
-+    getConsent().then(
-+      (consent) => {
-+        if (consent.active) setStage({ name: "idle" });
-+        else router.replace(consent.version && !consent.withdrawn_at ? "/consent?updated=1" : "/consent");
-+      },
-+      (err) => {
-+        if (!(err instanceof ApiError && err.code === "UNAUTHENTICATED")) setStage({ name: "idle" });
-+      },
-+    );
-+  }, [router]);
++    checkConsent();
++  }, [checkConsent]);
 +
 +  function dropPhoto() {
 +    setPhoto((current) => {
@@ -2342,6 +2388,8 @@ index 0000000..ae5120c
 +      case "PROVIDER_ERROR":
 +      case "PROVIDER_INVALID_OUTPUT":
 +      case "PROVIDER_TIMEOUT":
++      case "INTERNAL_ERROR":
++        if (err.code === "INTERNAL_ERROR" && err.fallback !== "manual") return false;
 +        setStage({ name: "fallback", retryable: err.retryable });
 +        return true;
 +      default:
@@ -2426,6 +2474,26 @@ index 0000000..ae5120c
 +        <p role="status" className="muted">
 +          {th.loading}
 +        </p>
++      );
++
++    case "consentError":
++      return (
++        <div role="alert" className="alert alert-danger stack">
++          <p>
++            <strong>{th.consent.checkFailedTitle}</strong>
++          </p>
++          <p>{th.consent.checkFailedBody}</p>
++          <button
++            type="button"
++            className="btn btn-secondary"
++            onClick={() => {
++              setStage({ name: "checking" });
++              checkConsent();
++            }}
++          >
++            {th.history.retry}
++          </button>
++        </div>
 +      );
 +
 +    case "idle":
@@ -2820,10 +2888,10 @@ index 0000000..70660ef
 +}
 diff --git a/src/components/DishEditor.tsx b/src/components/DishEditor.tsx
 new file mode 100644
-index 0000000..c3bb4eb
+index 0000000..c93deba
 --- /dev/null
 +++ b/src/components/DishEditor.tsx
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,167 @@
 +"use client";
 +
 +import { useId, useState } from "react";
@@ -2833,6 +2901,7 @@ index 0000000..c3bb4eb
 +  GRAMS_MAX,
 +  GRAMS_MIN,
 +  KCAL_MAX,
++  exceedsKcalCap,
 +  isIntInRange,
 +  withGrams,
 +  withManualKcal,
@@ -2872,6 +2941,7 @@ index 0000000..c3bb4eb
 +
 +  const commitGrams = (grams: number) => {
 +    if (!isIntInRange(grams, GRAMS_MIN, GRAMS_MAX)) return th.edit.gramsError;
++    if (exceedsKcalCap(draft, grams)) return th.edit.kcalCapError;
 +    setDraft((d) => withGrams(d, grams));
 +    return null;
 +  };
@@ -3767,10 +3837,10 @@ index 0000000..1d2b73f
 +}
 diff --git a/src/copy/th.ts b/src/copy/th.ts
 new file mode 100644
-index 0000000..dc8ff81
+index 0000000..7aec36d
 --- /dev/null
 +++ b/src/copy/th.ts
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,174 @@
 +// Source: design.md and canvas boards; error text comes from message_th at runtime (contract C-ERR).
 +// Strings marked NEW are FE copy with no canvas source and need copy review.
 +export const th = {
@@ -3803,6 +3873,8 @@ index 0000000..dc8ff81
 +    versionLine: (version: string) => `ข้อความฉบับ ${version}`,
 +    button: "ยินยอมและดำเนินการต่อ",
 +    buttonHint: "ปุ่มจะใช้งานได้เมื่อคุณติ๊กช่องยินยอม",
++    checkFailedTitle: "ตรวจสอบความยินยอมไม่สำเร็จ", // NEW
++    checkFailedBody: "ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง ยังไม่มีการส่งรูปออกจากเครื่อง", // NEW
 +    decline: "ไม่ยินยอม กรอกข้อมูลมื้ออาหารเอง",
 +    declineHint: "เลือกกรอกเอง ระบบจะไม่ส่งรูปไปวิเคราะห์ และไม่ต้องให้ความยินยอมนี้",
 +  },
@@ -3861,6 +3933,7 @@ index 0000000..dc8ff81
 +    nameError: "กรอกชื่ออาหาร (ไม่เกิน 120 ตัวอักษร)", // NEW
 +    hintError: "ชื่อสำหรับประเมินใหม่ต้องไม่เกิน 80 ตัวอักษร", // NEW
 +    gramsError: "ใส่ปริมาณระหว่าง 1 ถึง 5,000 กรัม",
++    kcalCapError: "แคลอรี่เกิน 5,000 กิโลแคลอรี่ ลดปริมาณลง", // NEW
 +    kcalError: "ใส่แคลอรี่เป็นตัวเลข 0 ถึง 5,000",
 +  },
 +  notFood: {
@@ -4304,12 +4377,12 @@ index 0000000..143515c
 +}
 diff --git a/src/lib/client/meal.test.ts b/src/lib/client/meal.test.ts
 new file mode 100644
-index 0000000..e6568a7
+index 0000000..9c3794d
 --- /dev/null
 +++ b/src/lib/client/meal.test.ts
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,77 @@
 +import { describe, expect, it } from "vitest";
-+import { clampGrams, confidenceLevel, formatRange, toItem, toMealItem, totals, withGrams, withManualKcal, withRename } from "./meal";
++import { clampGrams, confidenceLevel, exceedsKcalCap, formatRange, toItem, toMealItem, totals, withGrams, withManualKcal, withRename } from "./meal";
 +
 +const dish = {
 +  name_th: "ข้าวกะเพราไก่ไข่ดาว",
@@ -4376,12 +4449,21 @@ index 0000000..e6568a7
 +    expect(toMealItem(toItem(dish)).edited).toBe(false);
 +  });
 +});
++
++describe("kcal cap (review M-1)", () => {
++  it("flags a portion whose scaled kcal exceeds 5000 and clamps if applied", () => {
++    const item = toItem(dish);
++    expect(exceedsKcalCap(item, 5000)).toBe(true);
++    expect(exceedsKcalCap(item, 500)).toBe(false);
++    expect(withGrams(item, 5000).kcal_high).toBe(5000);
++  });
++});
 diff --git a/src/lib/client/meal.ts b/src/lib/client/meal.ts
 new file mode 100644
-index 0000000..38af5d9
+index 0000000..8488838
 --- /dev/null
 +++ b/src/lib/client/meal.ts
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,100 @@
 +import type { Dish, MealItemIn } from "@/shared/api-types";
 +
 +export const GRAMS_MIN = 1;
@@ -4422,9 +4504,16 @@ index 0000000..38af5d9
 +  return Math.min(GRAMS_MAX, Math.max(GRAMS_MIN, Math.round(grams)));
 +}
 +
++const scaled = (item: Item, grams: number, kcal: number) => Math.round((kcal * grams) / item.base.grams);
++
++// The server rejects kcal above KCAL_MAX, so the editor refuses a portion that would exceed it.
++export function exceedsKcalCap(item: Item, grams: number): boolean {
++  return scaled(item, clampGrams(grams), item.base.kcal_high) > KCAL_MAX;
++}
++
 +export function withGrams(item: Item, grams: number): Item {
 +  const next = clampGrams(grams);
-+  const scale = (kcal: number) => Math.round((kcal * next) / item.base.grams);
++  const scale = (kcal: number) => Math.min(KCAL_MAX, scaled(item, next, kcal));
 +  return {
 +    ...item,
 +    grams: next,
@@ -4477,10 +4566,10 @@ index 0000000..38af5d9
 +}
 diff --git a/src/server/analyze-route.test.ts b/src/server/analyze-route.test.ts
 new file mode 100644
-index 0000000..3e8ab9e
+index 0000000..2690e92
 --- /dev/null
 +++ b/src/server/analyze-route.test.ts
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,221 @@
 +import Anthropic from "@anthropic-ai/sdk";
 +import sharp from "sharp";
 +import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -4676,6 +4765,15 @@ index 0000000..3e8ab9e
 +    const { error } = await res.json();
 +    expect(error).toMatchObject({ code: "PROVIDER_ERROR", retryable: true, fallback: "manual" });
 +    expect(create).toHaveBeenCalledTimes(2);
++  });
++
++  it("returns 500 INTERNAL_ERROR with fallback manual and no exception text on an unexpected fault", async () => {
++    vi.mocked(checkAndRecordAnalysis).mockRejectedValue(new Error("db password leaked"));
++    const res = await POST(request({ photo: asFile(await photoWithExif(100, 100)) }));
++    expect(res.status).toBe(500);
++    const body = await res.json();
++    expect(body.error).toMatchObject({ code: "INTERNAL_ERROR", retryable: true, fallback: "manual" });
++    expect(JSON.stringify(body)).not.toContain("leaked");
 +  });
 +
 +  it("returns 504 PROVIDER_TIMEOUT when both attempts time out", async () => {
@@ -5307,10 +5405,10 @@ index 0000000..41ea113
 +);
 diff --git a/src/server/errors.test.ts b/src/server/errors.test.ts
 new file mode 100644
-index 0000000..7e51e96
+index 0000000..ee5c53e
 --- /dev/null
 +++ b/src/server/errors.test.ts
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,61 @@
 +import { describe, expect, it } from "vitest";
 +import type { ErrorCode } from "../shared/api-types";
 +import { ERROR_SPECS, errorResponse } from "./errors";
@@ -5325,6 +5423,12 @@ index 0000000..7e51e96
 +    expect(error.code).toBe(code);
 +    expect(error.message_th).toMatch(/[฀-๿]/);
 +    expect(typeof error.retryable).toBe("boolean");
++  });
++
++  it("uses the contract text for INTERNAL_ERROR", async () => {
++    const { error } = await errorResponse("INTERNAL_ERROR").json();
++    expect(error.message_th).toBe("เกิดข้อผิดพลาดภายในระบบ กรุณาลองอีกครั้ง");
++    expect(error.retryable).toBe(true);
 +  });
 +
 +  it("maps the contract statuses", () => {
@@ -5368,10 +5472,10 @@ index 0000000..7e51e96
 +});
 diff --git a/src/server/errors.ts b/src/server/errors.ts
 new file mode 100644
-index 0000000..6557ebf
+index 0000000..3f1e70f
 --- /dev/null
 +++ b/src/server/errors.ts
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,95 @@
 +import type { ApiErrorBody, ErrorCode } from "../shared/api-types";
 +
 +type ErrorSpec = {
@@ -5424,7 +5528,7 @@ index 0000000..6557ebf
 +  },
 +  INTERNAL_ERROR: {
 +    status: 500,
-+    message_th: "เกิดข้อผิดพลาดของระบบ กรุณาลองอีกครั้งในภายหลัง",
++    message_th: "เกิดข้อผิดพลาดภายในระบบ กรุณาลองอีกครั้ง",
 +    retryable: true,
 +  },
 +};
@@ -5433,6 +5537,7 @@ index 0000000..6557ebf
 +  details?: { path: string; code: string }[];
 +  required_version?: string;
 +  retryAfterSec?: number;
++  fallbackManual?: boolean;
 +};
 +
 +export class AppError extends Error {
@@ -5451,7 +5556,7 @@ index 0000000..6557ebf
 +      code,
 +      message_th: spec.message_th,
 +      retryable: spec.retryable,
-+      ...(spec.fallback && { fallback: spec.fallback }),
++      ...((spec.fallback || extras.fallbackManual) && { fallback: "manual" as const }),
 +      ...(extras.details && { details: extras.details }),
 +      ...(extras.required_version && { required_version: extras.required_version }),
 +    },
@@ -5468,10 +5573,10 @@ index 0000000..6557ebf
 +}
 diff --git a/src/server/http.test.ts b/src/server/http.test.ts
 new file mode 100644
-index 0000000..9f376c6
+index 0000000..413ee42
 --- /dev/null
 +++ b/src/server/http.test.ts
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,60 @@
 +import { describe, expect, it, vi } from "vitest";
 +
 +vi.mock("./auth", () => ({ auth: vi.fn() }));
@@ -5518,6 +5623,14 @@ index 0000000..9f376c6
 +    log.mockRestore();
 +  });
 +
++  it("adds fallback manual to INTERNAL_ERROR only when the route asks for it", async () => {
++    const boom = async () => {
++      throw new Error("x");
++    };
++    expect((await (await api("POST /a", boom, { fallbackManual: true })(req())).json()).error.fallback).toBe("manual");
++    expect((await (await api("POST /b", boom)(req())).json()).error.fallback).toBeUndefined();
++  });
++
 +  it("passes route params to the handler", async () => {
 +    const handler = api<{ id: string }>("DELETE /x/[id]", async (_req, params) => Response.json(params));
 +    const res = await handler(req(), { params: Promise.resolve({ id: "abc" }) });
@@ -5526,10 +5639,10 @@ index 0000000..9f376c6
 +});
 diff --git a/src/server/http.ts b/src/server/http.ts
 new file mode 100644
-index 0000000..3cd7981
+index 0000000..76828aa
 --- /dev/null
 +++ b/src/server/http.ts
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,91 @@
 +import { auth } from "./auth";
 +import { AppError, errorResponse, zodDetails } from "./errors";
 +import { hashUserId, logEvent, type LogMeta } from "./log";
@@ -5543,7 +5656,11 @@ index 0000000..3cd7981
 +type Handler<P> = (req: Request, params: P, ctx: ApiContext) => Promise<Response>;
 +
 +// Wraps a route handler: stable error envelope for every failure, one metadata log line per request.
-+export function api<P extends Record<string, string> = Record<string, string>>(route: string, handler: Handler<P>) {
++export function api<P extends Record<string, string> = Record<string, string>>(
++  route: string,
++  handler: Handler<P>,
++  opts: { fallbackManual?: boolean } = {},
++) {
 +  return async (req: Request, routeCtx?: { params: Promise<P> }): Promise<Response> => {
 +    const started = Date.now();
 +    const requestId = crypto.randomUUID();
@@ -5568,7 +5685,7 @@ index 0000000..3cd7981
 +      } else {
 +        errorCode = "INTERNAL_ERROR";
 +        errorName = err instanceof Error ? err.name : typeof err;
-+        response = errorResponse("INTERNAL_ERROR");
++        response = errorResponse("INTERNAL_ERROR", { fallbackManual: opts.fallbackManual });
 +      }
 +    }
 +    logEvent({
@@ -5619,10 +5736,10 @@ index 0000000..3cd7981
 +}
 diff --git a/src/server/image.test.ts b/src/server/image.test.ts
 new file mode 100644
-index 0000000..160e054
+index 0000000..8ee6a53
 --- /dev/null
 +++ b/src/server/image.test.ts
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,69 @@
 +import sharp from "sharp";
 +import { describe, expect, it } from "vitest";
 +import { detectImageType, processImage } from "./image";
@@ -5682,20 +5799,27 @@ index 0000000..160e054
 +    expect(meta.orientation).toBeUndefined();
 +  });
 +
++  it("rejects an input above the 40 megapixel limit before decoding it", async () => {
++    const huge = await solid(8000, 5200).png({ compressionLevel: 9 }).toBuffer();
++    expect(huge.length).toBeLessThan(1_000_000);
++    await expect(processImage(huge)).rejects.toThrow(/pixel/i);
++  });
++
 +  it("rejects bytes that have image magic but cannot be decoded", async () => {
 +    await expect(processImage(Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x01]))).rejects.toThrow();
 +  });
 +});
 diff --git a/src/server/image.ts b/src/server/image.ts
 new file mode 100644
-index 0000000..cb5b424
+index 0000000..7b1c857
 --- /dev/null
 +++ b/src/server/image.ts
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,23 @@
 +import sharp from "sharp";
 +
 +export const MAX_UPLOAD_BYTES = 4_000_000;
 +const LONG_EDGE_PX = 1024;
++const MAX_INPUT_PIXELS = 40_000_000;
 +
 +export function detectImageType(bytes: Uint8Array): "jpeg" | "png" | "webp" | null {
 +  const startsWith = (sig: number[], offset = 0) => sig.every((b, i) => bytes[offset + i] === b);
@@ -5707,7 +5831,7 @@ index 0000000..cb5b424
 +
 +// sharp drops all metadata (EXIF, GPS, ICC) unless asked to keep it.
 +export function processImage(input: Buffer): Promise<Buffer> {
-+  return sharp(input)
++  return sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
 +    .rotate()
 +    .resize({ width: LONG_EDGE_PX, height: LONG_EDGE_PX, fit: "inside", withoutEnlargement: true })
 +    .flatten({ background: "#ffffff" })
@@ -5820,15 +5944,26 @@ index 0000000..e00ed34
 +}
 diff --git a/src/server/rate-limit.test.ts b/src/server/rate-limit.test.ts
 new file mode 100644
-index 0000000..850af33
+index 0000000..b67cf0f
 --- /dev/null
 +++ b/src/server/rate-limit.test.ts
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,68 @@
 +import { describe, expect, it, vi } from "vitest";
 +
 +vi.mock("server-only", () => ({}));
 +
-+const { decideWindow } = await import("./rate-limit");
++const calls: string[] = [];
++let windowRows: { createdAt: Date }[] = [];
++const fakeTx = {
++  execute: async () => void calls.push("lock"),
++  delete: () => ({ where: async () => void calls.push("delete-old") }),
++  select: () => ({ from: () => ({ where: () => ({ orderBy: async () => (calls.push("count"), windowRows) }) }) }),
++  insert: () => ({ values: async () => void calls.push("insert") }),
++};
++vi.mock("./db", () => ({ getDb: () => ({ transaction: async (fn: (tx: typeof fakeTx) => unknown) => fn(fakeTx) }) }));
++vi.mock("./config", () => ({ getConfig: () => ({ analyzeRateLimitPerHour: 2 }) }));
++
++const { decideWindow, checkAndRecordAnalysis } = await import("./rate-limit");
 +
 +const now = new Date("2026-10-08T12:00:00.000Z");
 +const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000);
@@ -5861,6 +5996,24 @@ index 0000000..850af33
 +  it("honours a configured limit of 1", () => {
 +    expect(decideWindow([], now, 1)).toEqual({ allowed: true });
 +    expect(decideWindow([minutesAgo(1)], now, 1).allowed).toBe(false);
++  });
++});
++
++// Gap: the advisory lock itself (two concurrent requests serialised by Postgres) cannot be exercised
++// without a real Postgres; these tests only pin the order of operations inside the transaction.
++describe("checkAndRecordAnalysis transaction", () => {
++  it("takes the lock first, then prunes, counts and records an event under the limit", async () => {
++    calls.length = 0;
++    windowRows = [{ createdAt: minutesAgo(3) }];
++    expect(await checkAndRecordAnalysis("user-1", now)).toEqual({ allowed: true });
++    expect(calls).toEqual(["lock", "delete-old", "count", "insert"]);
++  });
++
++  it("does not record an event when the limit is reached", async () => {
++    calls.length = 0;
++    windowRows = [{ createdAt: minutesAgo(30) }, { createdAt: minutesAgo(3) }];
++    expect(await checkAndRecordAnalysis("user-1", now)).toEqual({ allowed: false, retryAfterSec: 30 * 60 });
++    expect(calls).toEqual(["lock", "delete-old", "count"]);
 +  });
 +});
 diff --git a/src/server/rate-limit.ts b/src/server/rate-limit.ts

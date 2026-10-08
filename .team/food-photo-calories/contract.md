@@ -1,6 +1,6 @@
 # Contract: food-photo-calories
 
-Date: 2026-10-08. Architect round 4 (r1 plus designer Q1-Q6, frontend-dev Q7, backend deltas D1-D6, see C-DESIGN-Q and C-BE-DELTAS). Inputs: ac.md, brief.md, docs/plan/food-photo-calories.md, ADR 0001 (Accepted), 0002 (Proposed), 0003 (Accepted), deploy.md (devops r1), design.md. New decision record: ADR 0004.
+Date: 2026-10-08. Architect round 5 (r1 plus designer Q1-Q6, frontend-dev Q7, backend deltas D1-D6, docs-writer rulings R1-R4, see C-DESIGN-Q, C-BE-DELTAS, C-DOCS-RULINGS). Inputs: ac.md, brief.md, docs/plan/food-photo-calories.md, ADR 0001 (Accepted), 0002 (Proposed), 0003 (Accepted), deploy.md (devops r1), design.md. New decision record: ADR 0004.
 Every section has a stable id (`C-*`). The `AC id -> section` table is `C-TRACE`.
 
 ## C-STACK Stack and reasons
@@ -97,7 +97,7 @@ Error body, all endpoints:
 | CONSENT_REQUIRED | 403 | ต้องให้ความยินยอมก่อนจึงจะวิเคราะห์รูปได้ |
 | CONSENT_VERSION_MISMATCH | 409 | ข้อความความยินยอมมีการอัปเดต กรุณาอ่านและยืนยันอีกครั้ง |
 | INVALID_FILE_TYPE | 400 | รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB |
-| FILE_TOO_LARGE | 413 | รองรับเฉพาะรูป JPEG, PNG, WebP ขนาดไม่เกิน 10 MB |
+| FILE_TOO_LARGE | 413 | ไฟล์ที่ส่งมาใหญ่เกิน 4 MB หลังย่อรูป กรุณาเลือกรูปอื่น (ต้นฉบับต้องไม่เกิน 10 MB) |
 | RATE_LIMITED | 429 | วิเคราะห์ครบจำนวนต่อชั่วโมงแล้ว กรุณารอสักครู่ |
 | PROVIDER_ERROR | 502 | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
 | PROVIDER_INVALID_OUTPUT | 502 | วิเคราะห์รูปไม่สำเร็จ กรอกข้อมูลเองได้ |
@@ -131,14 +131,17 @@ Request: `multipart/form-data`
 | `dish_hint` | text | Optional, 1..80 chars. Used by FE for re-estimate after a dish rename (AC-8). Photo is held by FE for the session, re-sent; server stores nothing. |
 | `dish_index` | text (integer) | Optional, 0..9, default 0. Valid only together with `dish_hint` (else 400 `BAD_REQUEST`). States which dish of the previous result the client is replacing. The server does not use it for analysis; it echoes it in the 200 response so FE replaces the right dish. |
 
-Server steps, in order:
+Server steps, in this exact order (R1, R2):
 1. Origin check, then session check (401).
 2. Active consent for current `CONSENT_VERSION` (403 `CONSENT_REQUIRED`). Checked before the body is read.
-3. Parse multipart; detect type by magic bytes (JPEG `FFD8FF`, PNG `89504E47`, WebP `RIFF....WEBP`), not by declared content type. Reject (400 `INVALID_FILE_TYPE`) before any provider call. Size over cap: 413 `FILE_TOO_LARGE`. Both messages state the limit in Thai (JPEG/PNG/WebP, ไม่เกิน 10 MB).
+3. Parse multipart and validate the file, cheapest check first:
+   a. Size over cap 4,000,000 bytes: 413 `FILE_TOO_LARGE`.
+   b. Type by magic bytes (JPEG `FFD8FF`, PNG `89504E47`, WebP `RIFF....WEBP`), not by declared content type: otherwise 400 `INVALID_FILE_TYPE`.
+   c. Decode and normalize with sharp: auto-rotate, resize to fit 1024 px long edge (never enlarge), re-encode JPEG q85, no metadata kept (removes EXIF/GPS/device tags). A file that passes the magic bytes but fails to decode: 400 `INVALID_FILE_TYPE`.
+   All three are "file validation" for C-RATE: no provider call and no rate-limit count happen if any fails. The processed buffer is the only thing later sent. Nothing is written to disk, DB or logs; buffers are dropped when the request ends (ADR 0002).
 4. Rate limit check and record (C-RATE). 429 `RATE_LIMITED` with `Retry-After` seconds.
-5. Per-request image processing with sharp: auto-rotate, resize to fit 1024 px long edge (never enlarge), re-encode JPEG q85, no metadata kept (removes EXIF/GPS/device tags). The processed buffer is the only thing sent. Nothing is written to disk, DB or logs; buffers are dropped when the request ends (ADR 0002).
-6. `analyzeFood` (C-VISION).
-7. Respond.
+5. `analyzeFood` (C-VISION).
+6. Respond.
 
 Responses:
 | Status | Body | When |
@@ -155,7 +158,7 @@ Responses:
 | 502 | `PROVIDER_INVALID_OUTPUT` (`fallback: "manual"`) | Two invalid outputs (AC-12). |
 | 504 | `PROVIDER_TIMEOUT` (`retryable: true`, `fallback: "manual"`) | Both attempts timed out. |
 
-Constraint on AC-1 (non-blocking, flagged to devops): a body above the platform limit (about 4.5 MB) is refused by Vercel with a platform 413 before route code runs, so the Thai 10 MB message cannot come from the server for such bodies. Therefore the 10 MB check is client-side on the original file (before resize, FE, C-FE-CLIENT). Server enforces its own lower cap on the resized upload.
+Limits and who states them (R4). The limit a user sees is 10 MB on the original file; it is enforced and worded client-side (FE copy in `src/copy/th.ts`, AC-1) before resize. The server cap of 4,000,000 bytes applies to the already-resized upload, so a compliant client never hits it. Bodies above the platform limit (about 4.5 MB) are refused by Vercel with a platform 413 before route code runs. The server `FILE_TOO_LARGE` text states its own real limit (4 MB after resize) and points back to the 10 MB original limit, so it is accurate whichever way it is reached.
 
 ## C-API-CONSENT Consent endpoints
 
@@ -189,7 +192,7 @@ type Meal = MealItemIn & { id: string /*uuid*/, created_at: string /*ISO*/ };
 - `POST /api/meals` body `{ "items": MealItemIn[] }` (1..10, one row per dish) -> 201 `{ "items": Meal[] }`. Rows created in one transaction; `created_at` set by server. Errors: 400 `BAD_REQUEST`, 401, 403 `BAD_ORIGIN`.
 - Manual entry: FE sends `source:"manual"`, `dish_name_en: null`, `kcal_low == kcal_high == user value`. This is the user's own entry, not an estimate. Display stays a range "N - N" (Q4) so the UI is consistent with AC-5; FE may label it as the user's entry.
 - `GET /api/meals?limit=<1..50, default 20>&before=<ISO>` -> 200 `{ "items": Meal[], "next_before": string|null }`, newest first, only the caller's rows.
-- `DELETE /api/meals/{id}` -> 204. Not found or not owner: 404 `NOT_FOUND`. Hard delete.
+- `DELETE /api/meals/{id}` -> 204. Not found, not owner, or `id` not a valid UUID: 404 `NOT_FOUND` in all three cases (R3). Hard delete.
 - `DELETE /api/meals?confirm=true` -> 204, hard-deletes all of the caller's meal rows (AC-17 "all food data"). Missing `confirm`: 400 `BAD_REQUEST`. Consent records are kept for audit (AC-18); no photos exist to delete (ADR 0002).
 
 Proportional recalc (AC-9) is client-side with no API call: `kcal' = round(kcal * newGrams / baseGrams)` for both low and high, `baseGrams` = grams of the dish in the last analysis result. Serving count is converted to grams by FE (`servings * baseGrams`).
@@ -249,7 +252,7 @@ No photo, thumbnail or image-derived column exists anywhere (ADR 0002). `analysi
 Decision: confirm PM proposal, 20 analyses per user per rolling hour, configurable via `ANALYZE_RATE_LIMIT_PER_HOUR`.
 Reason: worst-case spend per user is 20 x about $0.008 = about $0.16 per hour on Sonnet 5.5; a real meal-logging session is a few photos, and re-estimates (AC-8) count too, so 20 leaves room for retries without opening a cost-abuse hole. Spend cap on the Anthropic key (devops) is the second line of defence.
 
-Mechanics (BE, `src/server/rate-limit.ts`): in one transaction, take `pg_advisory_xact_lock(hashtext(user_id))`, delete the user's events older than 24 h, count events in the last 60 min; if count >= limit return 429 with `Retry-After` = seconds until the oldest counted event ages out; else insert one event. Counted once per request that passes consent and file validation, before the provider call; the provider retry does not add a count; invalid files and consent failures do not count. State is in Postgres, so it holds across serverless instances.
+Mechanics (BE, `src/server/rate-limit.ts`): in one transaction, take `pg_advisory_xact_lock(hashtext(user_id))`, delete the user's events older than 24 h, count events in the last 60 min; if count >= limit return 429 with `Retry-After` = seconds until the oldest counted event ages out; else insert one event. Counted once per request that passes consent and all three file validation steps (size, type, decode), immediately before the provider call; the provider retry does not add a count; invalid, undecodable or oversized files and consent failures do not count (R1). State is in Postgres, so it holds across serverless instances. Cost note: decode runs before the limit check, so a user can spend server CPU on bad files; this is bounded by auth, consent and the 4 MB cap and accepted for MVP.
 
 ## C-PRIV Privacy and PDPA behaviour
 
@@ -271,13 +274,14 @@ Covers AC-2, 14, 15, 16, 17, 18, 23.
 ## C-FE-CLIENT Client behaviour (FE)
 
 Covers AC-1, 3, 6, 8, 9, 14, 22. Files under `src/lib/client/`.
-- Pre-checks on the original file: type JPEG/PNG/WebP, size <= 10 MB; otherwise a Thai message stating the limit and no network call (AC-1).
+- Pre-checks on the original file: type JPEG/PNG/WebP, size <= 10 MB; otherwise a Thai message stating the limit and no network call (AC-1). This is where the 10 MB text is owned (R4).
 - Resize with `createImageBitmap(file, { imageOrientation: "from-image" })` then Canvas to JPEG q0.85, long edge <= 1024 (never enlarge). Canvas re-encode drops EXIF/GPS (AC-2, AC-3).
 - Keep the resized Blob in component state only, for re-estimate; never write it to localStorage, IndexedDB or the server except via C-API-ANALYZE.
 - Dish rename is free text only in MVP (Q1). On rename without re-estimate, clear `name_en` (C-API-MEALS rename rule, Q7).
 - Not-medical-advice disclaimer (Thai) renders on every screen that shows an estimate or saved range, visible or one tap away on the same screen (AC-6). Copy in `src/copy/th.ts`.
 - Calories shown only as `low - high kcal` (also when equal, "N - N"), with confidence label (derived from `confidence`: >= 0.75 high, >= 0.5 medium, else low) and assumptions list. No component renders a single estimate number (AC-5).
 - Dish names render Thai plus English when an English name exists (AC-22); a user-typed name shows Thai only; all UI strings Thai from `src/copy/th.ts`.
+- For server errors FE shows the returned `message_th` as is; no FE copy change is needed for R4.
 
 ## C-SPIKE Accuracy spike support (AC-24)
 
@@ -301,9 +305,9 @@ Dependencies: FE and BE name needed packages to devops (Orchestrator relays); de
 
 | AC | Section | Logic |
 |---|---|---|
-| AC-1 | C-FE-CLIENT, C-API-ANALYZE | Client 10 MB/type pre-check; server magic-byte check and 4 MB cap, Thai message with limit |
-| AC-2 | C-FE-CLIENT, C-API-ANALYZE step 5 | Canvas re-encode plus sharp re-encode without metadata; test inspects outgoing request image bytes |
-| AC-3 | C-FE-CLIENT, C-API-ANALYZE step 5 | Client resize 1024; server enforces |
+| AC-1 | C-FE-CLIENT, C-API-ANALYZE | Client 10 MB/type pre-check with the Thai limit text; server size, magic-byte and decode checks with its own accurate limit text |
+| AC-2 | C-FE-CLIENT, C-API-ANALYZE step 3c | Canvas re-encode plus sharp re-encode without metadata; test inspects outgoing request image bytes |
+| AC-3 | C-FE-CLIENT, C-API-ANALYZE step 3c | Client resize 1024; server enforces |
 | AC-4 | C-SCHEMA-OUT, C-API-ANALYZE | Dish fields incl. name_th/name_en, grams, kcal range, confidence, assumptions |
 | AC-5 | C-FE-CLIENT, C-SCHEMA-OUT | Range-only rendering rule, "N - N" when equal |
 | AC-6 | C-FE-CLIENT | Disclaimer on every estimate screen |
@@ -313,7 +317,7 @@ Dependencies: FE and BE name needed packages to devops (Orchestrator relays); de
 | AC-10 | C-API-MEALS POST, C-DATA meal_logs | Dish, grams, kcal range, edited, created_at |
 | AC-11 | C-VISION (retry), C-API-ANALYZE (500/502/504, `fallback:"manual"`), C-API-MEALS (manual save), C-ERR | One retry then manual form |
 | AC-12 | C-VISION steps 3-4, C-SCHEMA-OUT | zod validation, shared single retry |
-| AC-13 | C-RATE, C-API-ANALYZE step 4 | 20/h, 429, no provider call |
+| AC-13 | C-RATE, C-API-ANALYZE step 4 | 20/h, 429, no provider call; invalid files never counted |
 | AC-14 | C-PRIV, C-API-CONSENT, C-API-ANALYZE step 2 | FE gate plus BE 403 |
 | AC-15 | C-API-CONSENT, C-PRIV, C-DATA | Consent text in `src/shared/consent.ts`; unticked explicit action; version history via `superseded_at` |
 | AC-16 | C-API-CONSENT DELETE, C-DATA | Withdraw with `withdrawn_at`, analysis blocked |
@@ -347,9 +351,18 @@ Brief item to section: Must 1 -> C-API-MEALS; Must 2 -> C-SCHEMA-OUT, C-FE-CLIEN
 | D1 | `INTERNAL_ERROR` 500 added | Accepted as a generic 500 with `message_th`, `retryable: true`, no exception text (C-ERR). | Every route needs a safe catch-all; same envelope as other errors. |
 | D2 | Migration is `0000_init.sql` | Accepted; contract text updated (C-DATA). | drizzle-kit default numbering; name has no other meaning. |
 | D3 | `src/server/consent-version.ts` re-exports FE's `CONSENT_VERSION` | Accepted as a transitional re-export only. BE deletes it and imports `src/shared/consent.ts` directly once FE's file is merged; code-reviewer checks it is gone before release. | One owner per file: the constant belongs to FE's consent file, so a second copy must not live on. |
-| D4 | New-version consent sets `withdrawn_at` on the old active row | Changed. Not acceptable as built: `withdrawn_at` would record a withdrawal the user never made, which breaks AC-16/AC-18 audit meaning. Use a new nullable `superseded_at` column; the one-open-row index covers both columns (C-DATA, C-API-CONSENT). | Audit must distinguish "user withdrew" from "text version replaced". Small additive change. |
-| D5 | Strict origin check, missing Origin = 403 `BAD_ORIGIN`, before the session check | Confirmed, now specified in C-ORIGIN: non-GET methods only, `/api/auth/**` excluded. | Browsers always send Origin on non-GET; cheap, no DB; test tools must send Origin. |
-| D6 | Health returns only `{"status":"ok"}` | Confirmed (C-API-HEALTH). | AC-19: no key or env info; versions come from smoke commands. |
+| D4 | New-version consent sets `withdrawn_at` on the old active row | Changed: use a new nullable `superseded_at` column; the one-open-row index covers both columns (C-DATA, C-API-CONSENT). | Audit must distinguish "user withdrew" from "text version replaced". |
+| D5 | Strict origin check, missing Origin = 403 `BAD_ORIGIN`, before the session check | Confirmed, specified in C-ORIGIN. | Browsers always send Origin on non-GET; cheap, no DB. |
+| D6 | Health returns only `{"status":"ok"}` | Confirmed (C-API-HEALTH). | AC-19: no key or env info. |
+
+## C-DOCS-RULINGS Docs-writer findings, code vs contract (round 5)
+
+| # | Finding | Ruling | Who changes |
+|---|---|---|---|
+| R1 | A file that passes the magic-byte check but fails sharp still consumed a rate-limit slot | Contract stands (invalid files must not count). Fix the order, not the counting: decode with sharp happens in step 3c, before the rate-limit step; a decode failure returns 400 `INVALID_FILE_TYPE` and no slot is used (C-API-ANALYZE, C-RATE). | BE changes code: move the sharp decode and normalize before the rate-limit step; add a unit test that a corrupt JPEG leaves `analysis_events` unchanged. Contract updated. |
+| R2 | 413 size check runs before the 400 magic-byte check | Contract changes to match the code: size first, then magic bytes, then decode (cheapest first, avoids inspecting an oversized body). | None in code. Contract updated (C-API-ANALYZE step 3). QA: oversize non-image returns 413. |
+| R3 | Non-UUID meal id on DELETE returns 404 | Confirmed as intended: 404 `NOT_FOUND` for not found, not owner and malformed id. | None in code. Contract updated (C-API-MEALS). |
+| R4 | `FILE_TOO_LARGE` says 10 MB but the server cap is 4,000,000 bytes after resize | The user-facing limit stays 10 MB on the original, worded client-side by FE (AC-1). The server message states its own true limit: "ไฟล์ที่ส่งมาใหญ่เกิน 4 MB หลังย่อรูป กรุณาเลือกรูปอื่น (ต้นฉบับต้องไม่เกิน 10 MB)". `INVALID_FILE_TYPE` keeps the 10 MB wording. | BE changes the `FILE_TOO_LARGE` text in `src/server/errors.ts`. FE: no change (FE already owns the 10 MB client text and shows server `message_th` as is). Contract updated (C-ERR). |
 
 ## C-OPEN Open items
 
@@ -358,5 +371,6 @@ Brief item to section: Must 1 -> C-API-MEALS; Must 2 -> C-SCHEMA-OUT, C-FE-CLIEN
 - B-3 (PM): dish pick list for AC-8 needs a licensed source; MVP ships free text only. Non-blocking.
 - B-4 (PM): confirm that user-typed dish names showing Thai only satisfies AC-22 (Q7). Non-blocking.
 - B-5 (BE): implement D4 (`superseded_at`) and delete the D3 re-export. Fix round for BE, small.
+- B-6 (BE): implement R1 (decode before rate limit, with test) and R4 (`FILE_TOO_LARGE` text). Fix round for BE, small.
 - Non-blocking: platform body limit vs AC-1 (see C-API-ANALYZE); devops smoke posts 5 MB (expect platform 413) and 300 KB (expect 200), and all smoke and QA API calls must send an `Origin` header (C-ORIGIN). deploy.md smoke names `POST /api/analyze`: this contract uses the same path.
 - deploy.md risk 4 (persistent store) is resolved by ADR 0004 (Postgres); devops provisions it.

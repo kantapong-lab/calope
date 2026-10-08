@@ -76,3 +76,17 @@ none
 - Next: fixes land on fe, be, ops; re-merge feature; then step 7 (qa-tester and docs-writer) and step 8 re-review
 - Review 1 fixes: be 9a34b2c (M-3 sharp limit, L-1 text and fallback, L-4 order test) merged; fe 40afba3 (M-1 kcal cap, M-2 fail-closed consent, L-1 FE) merged into feature (c98b6ad)
 - Waiting: devops r7 (env example, data-check wiring) on ops. Then merge ops into feature, run full check, then code review 2 on fix diff (step 6 round 2), then step 7
+- Fix round merged: ops 5c6b0e7 (L-2 env, L-3 check:data and CI) and be 2f16e70 (B-8 docs in AC-23 check) into feature (merge 8128f46 and after). Feature on Node 24.21.0: npm test 186/186, lint clean, check:data ok, build ok
+- Step 6 round 2 (code review on fix delta, diff-review2.patch) running. After approve: step 7 QA and docs
+- Step 6 round 2: APPROVE (review-2 by code-reviewer; M-1..M-3, L-1..L-4 resolved; L-5 accepted Low). Feature = approved diff
+- Step 7 started: qa-tester on qa/food-photo-calories (worktree E:\projects\calope-qa), docs-writer on docs/food-photo-calories (worktree E:\projects\calope-docs)
+- Step 7 docs done: docs ce357db (committed by orchestrator; docs-writer had no shell). Hand-off 7-docs-writer-r1 validates (status not-ready; QA-dependent items pending). Docs found contract vs code gaps (rate-limit magic-byte count, 413 vs 400 order, non-UUID 404, FILE_TOO_LARGE 10 MB text vs 4 MB cap); sent to architect for round-5 ruling
+- QA running (qa/food-photo-calories, qa-report.md target)
+- Architect r5 (docs rulings, C-DOCS-RULINGS): R1 BE reorders decode before rate limit; R2 contract order size, magic, decode; R3 404 NOT_FOUND confirmed; R4 FILE_TOO_LARGE text states 4 MB post-resize limit. BE fix round sent (B-6). Architect B-5 may already be covered by superseded_at (3adc9fa); BE asked to confirm
+- QA still running on qa/food-photo-calories; docs ce357db on docs/food-photo-calories not yet merged into feature
+- BE round 5 (ca99338): decode before rate limit, FILE_TOO_LARGE text, B-5 already covered. Merged into feature (e640b58). Feature on Node 24.21.0: tests 187/187, lint 0, check:data ok, build 0
+- QA r1 (qa 8f7a23f): Fail on B-1 (rate limit consumed by corrupt JPEG). ALREADY FIXED on feature (decode at route.ts:55 before checkAndRecordAnalysis :60). QA tests merged into feature. Rerun on feature: unit 187/187; QA suite 235 pass, 2 fail (FILE_TOO_LARGE expectations stale vs R4 text), 26 skipped (DB, AC-24, browser, OAuth)
+- QA round 2 asked: align FILE_TOO_LARGE expectations with R4; rerun; handoff 7-qa-tester-r2
+- QA r2 (6fea768): PASS. Unit 187/187; QA suite 237 pass, 0 fail, 26 skipped (21 DB, 5 live/browser/OAuth/AC-24). Merged qa and docs (ce357db) into feature, head f8fbc66
+- Step 8 round 1: REJECT (docs stale: FILE_TOO_LARGE text, known gaps 2-3 already fixed, test counts; tests OK). Docs-writer asked to fix on docs branch; orchestrator commits and re-merges. Then step 8 round 2
+- Step 9 staging needs a Vercel project and deploy access from the user; step 10 Human gate

@@ -10,6 +10,7 @@ const record = (patch: Partial<Parameters<typeof toConsentStatus>[0] & object> =
   version: "v2",
   consentedAt: new Date("2026-10-08T10:00:00.000Z"),
   withdrawnAt: null,
+  supersededAt: null,
   ...patch,
 });
 
@@ -35,6 +36,12 @@ describe("toConsentStatus", () => {
     const status = toConsentStatus(record({ withdrawnAt: new Date("2026-10-09T01:00:00.000Z") }), "v2");
     expect(status.active).toBe(false);
     expect(status.withdrawn_at).toBe("2026-10-09T01:00:00.000Z");
+  });
+
+  it("is inactive when the record was superseded, with withdrawn_at still null", () => {
+    const status = toConsentStatus(record({ supersededAt: new Date("2026-10-09T01:00:00.000Z") }), "v2");
+    expect(status.active).toBe(false);
+    expect(status.withdrawn_at).toBeNull();
   });
 
   it("is inactive when the record is for an older version", () => {

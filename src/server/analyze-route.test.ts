@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("./consent-version", () => ({ CONSENT_VERSION: "test-v1" }));
+vi.mock("../shared/consent", () => ({ CONSENT_VERSION: "test-v1" }));
 vi.mock("./auth", () => ({ auth: vi.fn(async () => ({ user: { id: "user-1" } })) }));
 vi.mock("./consent", () => ({ getConsentStatus: vi.fn() }));
 vi.mock("./rate-limit", () => ({ checkAndRecordAnalysis: vi.fn() }));

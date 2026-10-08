@@ -1,4 +1,4 @@
-import { CONSENT_VERSION } from "../../../server/consent-version";
+import { CONSENT_VERSION } from "../../../shared/consent";
 import { ConsentPostSchema } from "../../../shared/schemas";
 import { getConsentStatus, recordConsent, withdrawConsent } from "../../../server/consent";
 import { AppError } from "../../../server/errors";

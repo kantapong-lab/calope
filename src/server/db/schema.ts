@@ -52,11 +52,12 @@ export const consentRecords = pgTable(
     version: text("version").notNull(),
     consentedAt: timestamp("consented_at", { withTimezone: true }).notNull().defaultNow(),
     withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
   },
   (t) => [
-    uniqueIndex("consent_one_active_per_user")
+    uniqueIndex("consent_one_open_per_user")
       .on(t.userId)
-      .where(sql`${t.withdrawnAt} is null`),
+      .where(sql`${t.withdrawnAt} is null and ${t.supersededAt} is null`),
   ],
 );
 

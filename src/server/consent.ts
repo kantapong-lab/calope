@@ -9,12 +9,17 @@ type ConsentRow = typeof consentRecords.$inferSelect;
 export function toConsentStatus(latest: ConsentRow | undefined, requiredVersion: string): ConsentStatus {
   return {
     required_version: requiredVersion,
-    active: latest !== undefined && latest.withdrawnAt === null && latest.version === requiredVersion,
+    active: latest !== undefined && latest.withdrawnAt === null &&
+      latest.supersededAt === null &&
+      latest.version === requiredVersion,
     version: latest?.version ?? null,
     consented_at: latest?.consentedAt.toISOString() ?? null,
     withdrawn_at: latest?.withdrawnAt?.toISOString() ?? null,
   };
 }
+
+const openRecord = (userId: string) =>
+  and(eq(consentRecords.userId, userId), isNull(consentRecords.withdrawnAt), isNull(consentRecords.supersededAt));
 
 async function latestRecord(userId: string, db: Pick<Db, "select"> = getDb()): Promise<ConsentRow | undefined> {
   const [row] = await db
@@ -37,14 +42,14 @@ export async function recordConsent(
   return getDb().transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${userId}::text))`);
     const latest = await latestRecord(userId, tx);
-    if (latest && latest.withdrawnAt === null && latest.version === requiredVersion) {
+    if (latest?.withdrawnAt === null && latest.supersededAt === null && latest.version === requiredVersion) {
       return { status: toConsentStatus(latest, requiredVersion), created: false };
     }
-    // Only one active record per user: an active record for an older version is closed first.
+    // One open record per user: an open record for an older version is marked superseded, not withdrawn.
     await tx
       .update(consentRecords)
-      .set({ withdrawnAt: new Date() })
-      .where(and(eq(consentRecords.userId, userId), isNull(consentRecords.withdrawnAt)));
+      .set({ supersededAt: new Date() })
+      .where(openRecord(userId));
     const [row] = await tx
       .insert(consentRecords)
       .values({ userId, version: requiredVersion })
@@ -57,6 +62,6 @@ export async function withdrawConsent(userId: string, requiredVersion: string): 
   await getDb()
     .update(consentRecords)
     .set({ withdrawnAt: new Date() })
-    .where(and(eq(consentRecords.userId, userId), isNull(consentRecords.withdrawnAt)));
+    .where(openRecord(userId));
   return getConsentStatus(userId, requiredVersion);
 }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("./consent-version", () => ({ CONSENT_VERSION: "test-v2" }));
+vi.mock("../shared/consent", () => ({ CONSENT_VERSION: "test-v2" }));
 vi.mock("./auth", () => ({ auth: vi.fn(async () => ({ user: { id: "user-1" } })) }));
 vi.mock("./consent", () => ({ getConsentStatus: vi.fn(), recordConsent: vi.fn(), withdrawConsent: vi.fn() }));
 vi.mock("./meals", () => ({ createMeals: vi.fn(), listMeals: vi.fn(), deleteMeal: vi.fn(), deleteAllMeals: vi.fn() }));

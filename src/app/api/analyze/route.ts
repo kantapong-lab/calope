@@ -1,6 +1,6 @@
 import type { AnalyzeResponse } from "../../../shared/api-types";
 import { AnalyzeFieldsSchema } from "../../../shared/schemas";
-import { CONSENT_VERSION } from "../../../server/consent-version";
+import { CONSENT_VERSION } from "../../../shared/consent";
 import { getConfig } from "../../../server/config";
 import { getConsentStatus } from "../../../server/consent";
 import { AppError, zodDetails } from "../../../server/errors";

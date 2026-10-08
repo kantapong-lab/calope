@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { th } from "@/copy/th";
 import { PortionStepper } from "./PortionStepper";
+
+afterEach(cleanup);
 
 describe("PortionStepper (AC-9)", () => {
   it("steps by 25 and clamps at the limit", () => {

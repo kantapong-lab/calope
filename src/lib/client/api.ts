@@ -18,6 +18,8 @@ export type AnalyzeResponse = {
   dish_index: number;
 };
 
+export const UNAUTHENTICATED_EVENT = "calope:unauthenticated";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -59,7 +61,7 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
   if (res.ok) return res;
   const err = await toError(res);
   if (err.code === "UNAUTHENTICATED" && typeof window !== "undefined") {
-    window.location.assign("/signin?signedout=1");
+    window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT));
   }
   throw err;
 }

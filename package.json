@@ -12,7 +12,8 @@
     "test": "vitest run",
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate --config=scripts/drizzle.config.ts",
-    "db:migrate": "drizzle-kit migrate --config=scripts/drizzle.config.ts"
+    "db:migrate": "drizzle-kit migrate --config=scripts/drizzle.config.ts",
+    "spike": "tsx --conditions react-server scripts/spike/run-spike.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.132.1",

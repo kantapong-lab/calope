@@ -58,8 +58,8 @@ describe("save payload (AC-10)", () => {
     expect(body).toMatchObject({ portion_grams: 175, kcal_low: 260, kcal_high: 340, edited: true, source: "ai" });
   });
 
-  it("keeps the English name after a rename", () => {
-    expect(toMealItem(withRename(toItem(dish), "ผัดกะเพรา")).dish_name_en).toBe(dish.name_en);
+  it("sends null English name after a rename", () => {
+    expect(toMealItem(withRename(toItem(dish), "ผัดกะเพรา")).dish_name_en).toBeNull();
   });
 
   it("unedited result has edited=false", () => {

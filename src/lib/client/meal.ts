@@ -60,9 +60,9 @@ export function withManualKcal(item: Item, kcal: number): Item {
   };
 }
 
-// Rename without re-estimate: numbers and name_en stay (AC-22); only name_th changes.
+// Rename without re-estimate (contract Q7): numbers stay, stale name_en is cleared and saved as null.
 export function withRename(item: Item, name: string): Item {
-  return { ...item, name_th: name, edited: true };
+  return { ...item, name_th: name, name_en: "", edited: true };
 }
 
 export function withReestimate(dish: Dish): Item {

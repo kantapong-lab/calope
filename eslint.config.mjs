@@ -22,7 +22,7 @@ const config = [
     },
   },
   {
-    files: ["src/server/vision/analyze-food.ts", "src/app/api/health/route.ts"],
+    files: ["src/server/vision/analyze-food.ts", "src/app/api/health/route.ts", "**/*.test.ts", "**/*.test.tsx"],
     rules: { "no-restricted-imports": "off" },
   },
 ];

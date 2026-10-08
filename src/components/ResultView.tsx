@@ -7,14 +7,14 @@ import { PhotoPreview } from "./PhotoPreview";
 
 type Props = {
   items: Item[];
-  photo: Blob;
+  photoUrl: string;
   saving: boolean;
   onEdit: (index: number) => void;
   onSave: () => void;
   onRetake: () => void;
 };
 
-export function ResultView({ items, photo, saving, onEdit, onSave, onRetake }: Props) {
+export function ResultView({ items, photoUrl, saving, onEdit, onSave, onRetake }: Props) {
   const sum = totals(items);
   return (
     <section className="stack">
@@ -25,7 +25,7 @@ export function ResultView({ items, photo, saving, onEdit, onSave, onRetake }: P
         </button>
       </header>
       <figure className="stack">
-        <PhotoPreview blob={photo} alt={th.result.photoCaption} />
+        <PhotoPreview src={photoUrl} alt={th.result.photoCaption} />
         <figcaption className="muted">{th.result.photoCaption}</figcaption>
       </figure>
       <div className="card stack" aria-live="polite">

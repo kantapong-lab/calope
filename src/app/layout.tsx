@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans_Thai } from "next/font/google";
+import { SessionGuard } from "@/components/SessionGuard";
 import { ToastProvider } from "@/components/Toast";
 import { th } from "@/copy/th";
 import "./globals.css";
@@ -12,7 +13,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="th" className={plex.variable}>
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <SessionGuard />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );

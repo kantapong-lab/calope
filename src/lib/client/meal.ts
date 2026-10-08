@@ -38,9 +38,16 @@ export function clampGrams(grams: number): number {
   return Math.min(GRAMS_MAX, Math.max(GRAMS_MIN, Math.round(grams)));
 }
 
+const scaled = (item: Item, grams: number, kcal: number) => Math.round((kcal * grams) / item.base.grams);
+
+// The server rejects kcal above KCAL_MAX, so the editor refuses a portion that would exceed it.
+export function exceedsKcalCap(item: Item, grams: number): boolean {
+  return scaled(item, clampGrams(grams), item.base.kcal_high) > KCAL_MAX;
+}
+
 export function withGrams(item: Item, grams: number): Item {
   const next = clampGrams(grams);
-  const scale = (kcal: number) => Math.round((kcal * next) / item.base.grams);
+  const scale = (kcal: number) => Math.min(KCAL_MAX, scaled(item, next, kcal));
   return {
     ...item,
     grams: next,

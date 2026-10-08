@@ -1,4 +1,4 @@
-// LEGAL-REVIEW: DRAFT wording, not approved (ADR 0002 Proposed, blocker B-1). Any text change must bump CONSENT_VERSION.
+// legal-confirmed 2026-10-08 (ADR 0002 Accepted). Wording unchanged; any text change must bump CONSENT_VERSION.
 export const CONSENT_VERSION = "2026-10-v1";
 
 export const CONSENT_TITLE = "ขอความยินยอมส่งรูปอาหารไปวิเคราะห์";

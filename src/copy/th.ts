@@ -1,9 +1,9 @@
 // Source: design.md and canvas boards; error text comes from message_th at runtime (contract C-ERR).
-// Strings marked NEW are FE copy with no canvas source and need copy review.
+// Strings marked "confirmed" are FE copy with no canvas source, confirmed by the user 2026-10-08.
 export const th = {
   appName: "บันทึกมื้ออาหาร",
   back: "กลับ",
-  loading: "กำลังโหลด", // NEW
+  loading: "กำลังโหลด", // confirmed 2026-10-08
   kcalUnit: "กิโลแคลอรี่",
   gramUnit: "กรัม",
   nav: { label: "เมนูหลัก", capture: "ถ่ายรูป", history: "ประวัติ", settings: "ตั้งค่า" },
@@ -30,6 +30,8 @@ export const th = {
     versionLine: (version: string) => `ข้อความฉบับ ${version}`,
     button: "ยินยอมและดำเนินการต่อ",
     buttonHint: "ปุ่มจะใช้งานได้เมื่อคุณติ๊กช่องยินยอม",
+    checkFailedTitle: "ตรวจสอบความยินยอมไม่สำเร็จ", // confirmed 2026-10-08
+    checkFailedBody: "ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง ยังไม่มีการส่งรูปออกจากเครื่อง", // confirmed 2026-10-08
     decline: "ไม่ยินยอม กรอกข้อมูลมื้ออาหารเอง",
     declineHint: "เลือกกรอกเอง ระบบจะไม่ส่งรูปไปวิเคราะห์ และไม่ต้องให้ความยินยอมนี้",
   },
@@ -42,7 +44,7 @@ export const th = {
     manual: "กรอกข้อมูลมื้ออาหารเอง",
   },
   rejected: {
-    typeTitle: "ไฟล์ไม่รองรับ", // NEW: canvas shows only the size title
+    typeTitle: "ไฟล์ไม่รองรับ", // confirmed 2026-10-08
     sizeTitle: "ไฟล์ใหญ่เกินไป",
     body: "ไฟล์ต้องไม่เกิน 10 MB และเป็น JPEG, PNG หรือ WebP เลือกรูปอื่นหรือถ่ายใหม่",
   },
@@ -76,7 +78,7 @@ export const th = {
     renamedTitle: "เปลี่ยนชื่ออาหารแล้ว แคลอรี่ยังเป็นของเดิม",
     renamedBody: 'กด "ประเมินใหม่จากชื่อนี้" หรือกรอกแคลอรี่เอง',
     reestimate: "ประเมินใหม่จากชื่อนี้",
-    reestimating: "กำลังประเมินใหม่", // NEW
+    reestimating: "กำลังประเมินใหม่", // confirmed 2026-10-08
     manualKcal: "กรอกแคลอรี่เอง",
     manualKcalLabel: "แคลอรี่ที่คุณกรอก (กิโลแคลอรี่)",
     portion: "ปริมาณ",
@@ -85,9 +87,10 @@ export const th = {
     increase: "เพิ่ม",
     adjusted: "แคลอรี่ที่ปรับตามปริมาณ",
     apply: "ใช้ค่านี้",
-    nameError: "กรอกชื่ออาหาร (ไม่เกิน 120 ตัวอักษร)", // NEW
-    hintError: "ชื่อสำหรับประเมินใหม่ต้องไม่เกิน 80 ตัวอักษร", // NEW
+    nameError: "กรอกชื่ออาหาร (ไม่เกิน 120 ตัวอักษร)", // confirmed 2026-10-08
+    hintError: "ชื่อสำหรับประเมินใหม่ต้องไม่เกิน 80 ตัวอักษร", // confirmed 2026-10-08
     gramsError: "ใส่ปริมาณระหว่าง 1 ถึง 5,000 กรัม",
+    kcalCapError: "แคลอรี่เกิน 5,000 กิโลแคลอรี่ ลดปริมาณลง", // confirmed 2026-10-08
     kcalError: "ใส่แคลอรี่เป็นตัวเลข 0 ถึง 5,000",
   },
   notFood: {
@@ -155,7 +158,7 @@ export const th = {
     withdrawnTitle: "ถอนความยินยอมแล้ว",
     withdrawnBody: "จะไม่มีการส่งรูปไปวิเคราะห์อีกจนกว่าคุณจะยินยอมใหม่ มื้ออาหารที่บันทึกไว้ยังอยู่ ลบได้ที่ด้านล่าง",
     statusWithdrawn: "สถานะ: ถอนแล้ว",
-    statusNone: "สถานะ: ยังไม่ได้ให้ความยินยอม", // NEW
+    statusNone: "สถานะ: ยังไม่ได้ให้ความยินยอม", // confirmed 2026-10-08
     consentAgain: "ยินยอมใหม่",
     dataHeading: "ลบข้อมูล",
     dataBody: "ลบรายการที่บันทึกไว้ทีละรายการได้ที่หน้าประวัติ หรือลบทั้งหมดที่นี่",

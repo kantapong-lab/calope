@@ -1,0 +1,49 @@
+# Staging on Docker Desktop. No secret values in this file.
+# Config comes from git-ignored files: .env.local (Anthropic, model) and .env.staging.local
+# (see .env.staging.example for the names: POSTGRES_*, DATABASE_URL, AUTH_*, ANTHROPIC_API_KEY).
+name: calope
+
+services:
+  db:
+    image: postgres:17-bookworm
+    env_file: .env.staging.local
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: builder
+    command: ["npm", "run", "db:migrate"]
+    env_file: .env.staging.local
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    env_file:
+      - .env.local
+      - .env.staging.local
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:

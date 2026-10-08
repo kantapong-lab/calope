@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dish, Meal } from "@/shared/api-types";
 import { th } from "@/copy/th";
 import { ApiError, analyze, getConsent, saveMeals } from "@/lib/client/api";
@@ -18,6 +18,7 @@ import { useToast } from "./Toast";
 
 type Stage =
   | { name: "checking" }
+  | { name: "consentError" }
   | { name: "idle"; rejected?: { code: FileProblem; message: string } }
   | { name: "analysing" }
   | { name: "result"; editing: number | null }
@@ -32,7 +33,7 @@ export function CaptureFlow() {
   const router = useRouter();
   const toast = useToast();
   const [stage, setStage] = useState<Stage>({ name: "checking" });
-  const [photo, setPhoto] = useState<Blob | null>(null);
+  const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [saving, setSaving] = useState(false);
   const abort = useRef<AbortController | null>(null);
@@ -40,21 +41,35 @@ export function CaptureFlow() {
   const galleryInput = useRef<HTMLInputElement>(null);
 
   // No photo may leave the device before consent (AC-14): gate the capture screen itself.
+  // If the check itself fails, stay closed and offer a retry rather than allowing capture.
+  const checkConsent = useCallback(
+    () =>
+      getConsent().then(
+        (consent) => {
+          if (consent.active) setStage({ name: "idle" });
+          else router.replace(consent.version && !consent.withdrawn_at ? "/consent?updated=1" : "/consent");
+        },
+        (err) => {
+          if (!(err instanceof ApiError && err.code === "UNAUTHENTICATED")) setStage({ name: "consentError" });
+        },
+      ),
+    [router],
+  );
+
   useEffect(() => {
-    getConsent().then(
-      (consent) => {
-        if (consent.active) setStage({ name: "idle" });
-        else router.replace(consent.version && !consent.withdrawn_at ? "/consent?updated=1" : "/consent");
-      },
-      (err) => {
-        if (!(err instanceof ApiError && err.code === "UNAUTHENTICATED")) setStage({ name: "idle" });
-      },
-    );
-  }, [router]);
+    checkConsent();
+  }, [checkConsent]);
+
+  function dropPhoto() {
+    setPhoto((current) => {
+      if (current) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  }
 
   function reset() {
     abort.current?.abort();
-    setPhoto(null);
+    dropPhoto();
     setItems([]);
     setStage({ name: "idle" });
   }
@@ -83,6 +98,8 @@ export function CaptureFlow() {
       case "PROVIDER_ERROR":
       case "PROVIDER_INVALID_OUTPUT":
       case "PROVIDER_TIMEOUT":
+      case "INTERNAL_ERROR":
+        if (err.code === "INTERNAL_ERROR" && err.fallback !== "manual") return false;
         setStage({ name: "fallback", retryable: err.retryable });
         return true;
       default:
@@ -91,7 +108,10 @@ export function CaptureFlow() {
   }
 
   async function run(blob: Blob) {
-    setPhoto(blob);
+    setPhoto((current) => {
+      if (current) URL.revokeObjectURL(current.url);
+      return { blob, url: URL.createObjectURL(blob) };
+    });
     setStage({ name: "analysing" });
     const controller = new AbortController();
     abort.current = controller;
@@ -129,7 +149,7 @@ export function CaptureFlow() {
   async function reestimate(index: number, hint: string): Promise<Dish | "not_food" | null> {
     if (!photo) return null;
     try {
-      const res = await analyze(photo, { dishHint: hint, dishIndex: index });
+      const res = await analyze(photo.blob, { dishHint: hint, dishIndex: index });
       return res.is_food && res.dishes[0] ? res.dishes[0] : "not_food";
     } catch (err) {
       if (err instanceof ApiError && err.code === "RATE_LIMITED") toast(err.messageTh, "danger");
@@ -142,7 +162,7 @@ export function CaptureFlow() {
     setSaving(true);
     try {
       setStage({ name: "saved", meals: await saveMeals(items.map(toMealItem)) });
-      setPhoto(null);
+      dropPhoto();
       setItems([]);
     } catch (err) {
       if (!(err instanceof ApiError && err.code === "UNAUTHENTICATED")) toast(th.genericError, "danger");
@@ -164,6 +184,26 @@ export function CaptureFlow() {
         <p role="status" className="muted">
           {th.loading}
         </p>
+      );
+
+    case "consentError":
+      return (
+        <div role="alert" className="alert alert-danger stack">
+          <p>
+            <strong>{th.consent.checkFailedTitle}</strong>
+          </p>
+          <p>{th.consent.checkFailedBody}</p>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setStage({ name: "checking" });
+              checkConsent();
+            }}
+          >
+            {th.history.retry}
+          </button>
+        </div>
       );
 
     case "idle":
@@ -198,7 +238,7 @@ export function CaptureFlow() {
       return (
         <section className="stack" aria-busy="true">
           <h1 className="h1">{th.analysing.title}</h1>
-          {photo && <PhotoPreview blob={photo} alt={th.analysing.photoAlt} />}
+          {photo && <PhotoPreview src={photo.url} alt={th.analysing.photoAlt} />}
           <p role="status" className="row">
             <span className="spinner" aria-hidden="true" />
             {th.analysing.status}
@@ -229,7 +269,7 @@ export function CaptureFlow() {
       return (
         <ResultView
           items={items}
-          photo={photo as Blob}
+          photoUrl={photo?.url ?? ""}
           saving={saving}
           onEdit={(i) => setStage({ name: "result", editing: i })}
           onSave={save}
@@ -241,7 +281,7 @@ export function CaptureFlow() {
       return (
         <section className="stack">
           <h1 className="h1">{th.result.title}</h1>
-          {photo && <PhotoPreview blob={photo} alt={th.result.photoCaption} />}
+          {photo && <PhotoPreview src={photo.url} alt={th.result.photoCaption} />}
           <div role="status" className="alert alert-info">
             <p>
               <strong>{th.notFood.title}</strong>
@@ -268,13 +308,13 @@ export function CaptureFlow() {
             <p>{th.fallback.body}</p>
           </div>
           {stage.retryable && photo && (
-            <button type="button" className="btn btn-primary" onClick={() => run(photo)}>
+            <button type="button" className="btn btn-primary" onClick={() => run(photo.blob)}>
               {th.fallback.retry}
             </button>
           )}
           <h2 className="h2">{th.fallback.manualTitle}</h2>
           <ManualForm variant="fallback" onSaved={(meals) => {
-              setPhoto(null);
+              dropPhoto();
               setStage({ name: "saved", meals });
             }} />
         </section>

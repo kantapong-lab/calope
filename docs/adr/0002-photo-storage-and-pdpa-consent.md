@@ -1,6 +1,6 @@
 # 0002. Photo storage, retention and PDPA consent
 
-Status: Proposed (needs legal review; also depends on ADR 0001 confirmation)
+Status: Accepted (user confirmed the consent wording and USA transfer text as drafted, 2026-10-08; ADR 0001 confirmed the same day)
 Date: 2026-10-08
 
 ## Context

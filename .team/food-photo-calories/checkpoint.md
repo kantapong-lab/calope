@@ -46,7 +46,18 @@ none
 - Contract round 2 done (architect); Q1-Q6 answered; B-1 legal (ADR 0002), B-3 dish list (PM) open, non-blocking
 - Gate 3d round 1: FAIL (Node 22.14 vs pin 24.21.0). Round 2 handoff repaired (status blocked, B-4 Node, B-5 key)
 - User approved Node 24.21.0 install. Installed via official MSI (SHA256 checked). Rerun checks 1-4 by orchestrator on Node 24.21.0: PASS (clean npm ci, build, /api/health 200 with node v24.21.0)
-- Live Anthropic call still blocked: no ANTHROPIC_API_KEY (B-5, PM). Devops asked to record round 3 handoff
+- Live Anthropic call still blocked: no ANTHROPIC_API_KEY (B-5, PM). Devops round 3 handoff: Pass, validates. GATE 3d PASSED (live call is a named open item for the Human gate)
+- Step 4 prep: scaffold committed on ops/food-photo-calories. Branches fe/ and be/ created from ops. Devops adding step-4 dependencies on ops first; FE and BE start after that commit
+- Branches: feature/food-photo-calories (planning commit 65d00ee), ops/food-photo-calories (scaffold d0c93d0, deps 8ed875c), fe/food-photo-calories, be/food-photo-calories (both ff to 8ed875c)
+- Step 4 started: frontend-dev in worktree E:\projects\calope-fe, backend-dev in E:\projects\calope-be (separate worktrees; same repo)
+- Open for devops: vitest.config (jsdom) not added; Co-Authored-By on commit 8ed875c is Sonnet 5.5 (agent setup), user instruction was Haiku 5.5. Not amended
+- Commit trailers for our work: Haiku 5.5 per user instruction
+- Contract Q7 (architect r3): on rename without re-estimate, dish_name_en = null (never a stale English name). FE asked to change 7a2c310 accordingly. Open PM item B-4: user-typed names show Thai only (non-blocking)
+- Frontend hand-off validated (not-ready: devops blockers B-1 vitest/jsdom, B-2 eslint)
+- Backend round 1 (be 53d8dfe): hand-off validated, not-ready. Needs FE consent.ts (merge fixes tsc), DB path and live call untested. Contract deltas sent to architect for round 4 (INTERNAL_ERROR, 0000_init, consent-version shim, withdrawn_at supersede, strict Origin, health {status:ok}). Devops asked for tsx, db scripts, ESLint exemption, smoke update
+- FE Q7 fix done: fe c22439b (name_en null on rename). FE hand-off round 1 still not-ready only on devops items
+- Devops r5 done: ops b008a59 (vitest projects node/jsdom, eslint 9 flat, lint and build pass). fe and be did NOT get it (ff refused, branches diverged). Still missing on ops: tsx and db scripts, asked devops r6
+- Next: devops r6, BE merge with ops (package.json), architect r4. Then step 5 merge fe+be into feature/food-photo-calories, then step 6 review
 
 ## History
 - step 1 r1: researcher not-ready; re-verify requested; orchestrator verified core facts with claude-api skill; remaining re-verify deferred to 3d

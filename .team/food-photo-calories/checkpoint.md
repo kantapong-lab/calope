@@ -90,3 +90,14 @@ none
 - QA r2 (6fea768): PASS. Unit 187/187; QA suite 237 pass, 0 fail, 26 skipped (21 DB, 5 live/browser/OAuth/AC-24). Merged qa and docs (ce357db) into feature, head f8fbc66
 - Step 8 round 1: REJECT (docs stale: FILE_TOO_LARGE text, known gaps 2-3 already fixed, test counts; tests OK). Docs-writer asked to fix on docs branch; orchestrator commits and re-merges. Then step 8 round 2
 - Step 9 staging needs a Vercel project and deploy access from the user; step 10 Human gate
+- Step 8 round 1: REJECT (docs stale). Docs fixed (c003a36, merged 0a60b99, records 1750200). Step 8 round 2: APPROVE (minor non-blocking: api doc header says round 1 and branch name; api doc line 46 should mention route.ts:33 JSON FILE_TOO_LARGE for oversized content-length)
+- Step 9 staging: BLOCKED on Vercel project and deploy access. Step 10 Human gate pending
+
+## User decisions (after step 8, 2026-10-08)
+- Legal review: user confirmed the consent wording and USA transfer text as drafted. ADR 0002 to be Accepted with that wording. LEGAL-REVIEW markers to be replaced by "legal-confirmed" in FE copy and docs.
+- PM decision on B-4 (user-typed names show Thai only): user said follow PM. PM's recommendation is free text only, no static dish list; keep as implemented.
+- Thai copy marked NEW in th.ts: confirmed.
+- Staging: NOT Vercel. Run in Docker Desktop (Docker 29.1.3 running). Step 9 becomes docker compose staging.
+- Anthropic credential given by user: an OAuth-style token (prefix sk-ant-oat01). Stored only in .env.local (git-ignored), not committed. Tested with one minimal request: x-api-key -> 401 invalid; Authorization Bearer + anthropic-beta oauth-2025-04-20 -> 429 rate limited (token accepted but throttled). The app's BE code uses x-api-key (ANTHROPIC_API_KEY), so it cannot use this token as it stands.
+- Open for user: (a) a standard API key (sk-ant-api03) for the app, or approve a bearer-token auth path; (b) user pasted the token in chat, recommend rotating it after use.
+- Postgres: will be provided by docker compose, so the 21 DB-skipped tests can run.

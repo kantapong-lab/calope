@@ -1,6 +1,6 @@
 # Contract: food-photo-calories
 
-Date: 2026-10-08. Architect round 2 (r1 plus designer Q1-Q6 answers, see C-DESIGN-Q). Inputs: ac.md, brief.md, docs/plan/food-photo-calories.md, ADR 0001 (Accepted), 0002 (Proposed), 0003 (Accepted), deploy.md (devops r1), design.md. New decision record: ADR 0004.
+Date: 2026-10-08. Architect round 3 (r1 plus designer Q1-Q6 answers and frontend-dev Q7, see C-DESIGN-Q). Inputs: ac.md, brief.md, docs/plan/food-photo-calories.md, ADR 0001 (Accepted), 0002 (Proposed), 0003 (Accepted), deploy.md (devops r1), design.md. New decision record: ADR 0004.
 Every section has a stable id (`C-*`). The `AC id -> section` table is `C-TRACE`.
 
 ## C-STACK Stack and reasons
@@ -160,7 +160,7 @@ Types:
 ```ts
 type MealItemIn = {
   dish_name_th: string;        // 1..120
-  dish_name_en?: string|null;  // 0..120
+  dish_name_en?: string|null;  // 0..120; null when the user typed the dish name (see rename rule)
   portion_grams: number;       // integer 1..5000
   kcal_low: number;            // integer 0..5000
   kcal_high: number;           // integer >= kcal_low, <= 5000
@@ -170,12 +170,14 @@ type MealItemIn = {
 type Meal = MealItemIn & { id: string /*uuid*/, created_at: string /*ISO*/ };
 ```
 - `POST /api/meals` body `{ "items": MealItemIn[] }` (1..10, one row per dish) -> 201 `{ "items": Meal[] }`. Rows created in one transaction; `created_at` set by server. Errors: 400 `BAD_REQUEST`, 401, 403 `BAD_ORIGIN`.
-- Manual entry: FE sends `source:"manual"`, `kcal_low == kcal_high == user value`. This is the user's own entry, not an estimate. Display stays a range "N - N" (Q4) so the UI is consistent with AC-5; FE may label it as the user's entry.
+- Manual entry: FE sends `source:"manual"`, `dish_name_en: null`, `kcal_low == kcal_high == user value`. This is the user's own entry, not an estimate. Display stays a range "N - N" (Q4) so the UI is consistent with AC-5; FE may label it as the user's entry.
 - `GET /api/meals?limit=<1..50, default 20>&before=<ISO>` -> 200 `{ "items": Meal[], "next_before": string|null }`, newest first, only the caller's rows.
 - `DELETE /api/meals/{id}` -> 204. Not found or not owner: 404 `NOT_FOUND`. Hard delete.
 - `DELETE /api/meals?confirm=true` -> 204, hard-deletes all of the caller's meal rows (AC-17 "all food data"). Missing `confirm`: 400 `BAD_REQUEST`. Consent records are kept for audit (AC-18); no photos exist to delete (ADR 0002).
 
-Proportional recalc (AC-9) is client-side with no API call: `kcal' = round(kcal * newGrams / baseGrams)` for both low and high, `baseGrams` = grams of the dish in the last analysis result. Serving count is converted to grams by FE (`servings * baseGrams`). Rename without re-estimate keeps the numbers and sets `edited=true`; re-estimate calls C-API-ANALYZE with `dish_hint` and `dish_index`.
+Proportional recalc (AC-9) is client-side with no API call: `kcal' = round(kcal * newGrams / baseGrams)` for both low and high, `baseGrams` = grams of the dish in the last analysis result. Serving count is converted to grams by FE (`servings * baseGrams`).
+
+Rename rule (Q7). When the user renames a dish without re-estimating, FE sets `dish_name_th` to the typed text, sets `dish_name_en` to `null`, keeps the kcal numbers and sets `edited=true`. FE never keeps a stale English name next to a new Thai name. A re-estimate (C-API-ANALYZE with `dish_hint` and `dish_index`) returns fresh `name_th` and `name_en` from the model and replaces both. No new API field: `dish_name_en` is already nullable. BE does not need to enforce this beyond the existing schema; QA tests that a renamed, non-re-estimated item is saved with `dish_name_en = null`.
 
 ## C-API-HEALTH GET /api/health
 
@@ -251,10 +253,10 @@ Covers AC-1, 3, 6, 8, 9, 14, 22. Files under `src/lib/client/`.
 - Pre-checks on the original file: type JPEG/PNG/WebP, size <= 10 MB; otherwise a Thai message stating the limit and no network call (AC-1).
 - Resize with `createImageBitmap(file, { imageOrientation: "from-image" })` then Canvas to JPEG q0.85, long edge <= 1024 (never enlarge). Canvas re-encode drops EXIF/GPS (AC-2, AC-3).
 - Keep the resized Blob in component state only, for re-estimate; never write it to localStorage, IndexedDB or the server except via C-API-ANALYZE.
-- Dish rename is free text only in MVP (Q1).
+- Dish rename is free text only in MVP (Q1). On rename without re-estimate, clear `name_en` (C-API-MEALS rename rule, Q7).
 - Not-medical-advice disclaimer (Thai) renders on every screen that shows an estimate or saved range, visible or one tap away on the same screen (AC-6). Copy in `src/copy/th.ts`.
 - Calories shown only as `low - high kcal` (also when equal, "N - N"), with confidence label (derived from `confidence`: >= 0.75 high, >= 0.5 medium, else low) and assumptions list. No component renders a single estimate number (AC-5).
-- Dish names render Thai plus English (AC-22); all UI strings Thai from `src/copy/th.ts`.
+- Dish names render Thai plus English when an English name exists (AC-22); a user-typed name shows Thai only; all UI strings Thai from `src/copy/th.ts`.
 
 ## C-SPIKE Accuracy spike support (AC-24)
 
@@ -285,7 +287,7 @@ Dependencies: FE and BE name needed packages to devops (Orchestrator relays); de
 | AC-5 | C-FE-CLIENT, C-SCHEMA-OUT | Range-only rendering rule, "N - N" when equal |
 | AC-6 | C-FE-CLIENT | Disclaimer on every estimate screen |
 | AC-7 | C-API-ANALYZE (200 is_food=false), C-FE-CLIENT | No kcal returned; manual entry offered |
-| AC-8 | C-API-ANALYZE (`dish_hint`, `dish_index`), C-API-MEALS, C-DESIGN-Q | Free-text rename, re-estimate or manual kcal; pick list is B-3 |
+| AC-8 | C-API-ANALYZE (`dish_hint`, `dish_index`), C-API-MEALS (rename rule), C-DESIGN-Q | Free-text rename, re-estimate or manual kcal; pick list is B-3 |
 | AC-9 | C-API-MEALS (proportional recalc) | Client-side, no provider call |
 | AC-10 | C-API-MEALS POST, C-DATA meal_logs | Dish, grams, kcal range, edited, created_at |
 | AC-11 | C-VISION (retry), C-API-ANALYZE (502/504, `fallback:"manual"`), C-API-MEALS (manual save) | One retry then manual form |
@@ -299,13 +301,13 @@ Dependencies: FE and BE name needed packages to devops (Orchestrator relays); de
 | AC-19 | C-CONFIG, C-VISION, C-OWN | Key server-only; one provider module; secret scan in smoke |
 | AC-20 | C-LOG | Typed logger, SDK debug off, marker test |
 | AC-21 | C-CONFIG, C-VISION | FOOD_VISION_MODEL validated at startup; request key allowlist test |
-| AC-22 | C-FE-CLIENT, C-SCHEMA-OUT, C-ERR | Thai copy file and message_th, Thai + English names |
+| AC-22 | C-FE-CLIENT, C-SCHEMA-OUT, C-ERR, C-API-MEALS (rename rule) | Thai copy file and message_th; Thai + English names for model-provided names; user-typed names Thai only (Q7) |
 | AC-23 | C-PRIV | CI pattern check, no data and no static dish list in repo |
 | AC-24 | C-SPIKE | Spike script, per-model run, 2000x1500 token check |
 
 Brief item to section: Must 1 -> C-API-MEALS; Must 2 -> C-SCHEMA-OUT, C-FE-CLIENT; Must 3 -> C-FE-CLIENT; Must 4 -> C-API-ANALYZE; Must 5 -> C-API-CONSENT, C-PRIV; Must 6 -> C-RATE, C-CONFIG, C-LOG; Must 7 -> C-VISION, C-API-ANALYZE; Must 8 -> C-FE-CLIENT; Must 9 -> C-PRIV; Runtime pin -> C-STACK, C-CONFIG, C-VISION; Spike -> C-SPIKE.
 
-## C-DESIGN-Q Answers to designer round 2 questions (design.md lines 94-99)
+## C-DESIGN-Q Answers to designer round 2 questions (design.md lines 94-99) and frontend-dev Q7
 
 | Q | Decision | Reason |
 |---|---|---|
@@ -315,11 +317,13 @@ Brief item to section: Must 1 -> C-API-MEALS; Must 2 -> C-SCHEMA-OUT, C-FE-CLIEN
 | Q4 equal low and high | Keep range form "N - N" everywhere, including manual entries. | One consistent display, satisfies AC-5 literally. |
 | Q5 no account name field | Out of MVP; settings shows no name. | No AC needs it. |
 | Q6 message_th missing on some codes | `message_th` required for every error code (C-ERR table). | FE never needs a code-to-text fallback. |
+| Q7 stale `name_en` after rename without re-estimate | Option (b) variant: FE clears `name_en` to `null` on rename (saved as `dish_name_en = null`); a re-estimate refreshes both names. No new API field, no `name_en_stale` flag. AC-22 holds: every model-provided dish shows Thai plus English; a name the user typed shows Thai only because no English exists (PM may accept or ask for a translate step later). | A wrong English name is worse than none; the field is already nullable, so no contract change for BE. |
 
 ## C-OPEN Open items
 
 - B-1 (PM): legal review of ADR 0002 consent wording and USA transfer. Does not block build; blocks release.
 - B-2 (PM): confirm login provider (Google for MVP). Needed before BE wires auth.
 - B-3 (PM): dish pick list for AC-8 needs a licensed source; MVP ships free text only. Non-blocking.
+- B-4 (PM): confirm that user-typed dish names showing Thai only satisfies AC-22 (Q7). Non-blocking.
 - Non-blocking: platform body limit vs AC-1 (see C-API-ANALYZE); devops smoke posts 5 MB (expect platform 413) and 300 KB (expect 200). deploy.md smoke names `POST /api/analyze`: this contract uses the same path.
 - deploy.md risk 4 (persistent store) is resolved by ADR 0004 (Postgres); devops provisions it.

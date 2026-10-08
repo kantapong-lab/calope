@@ -1,0 +1,36 @@
+{
+  "role": "backend-dev",
+  "task": "food-photo-calories",
+  "step": "4",
+  "round": 1,
+  "status": "not-ready",
+  "paths_written": [
+    "E:\\projects\\calope-be\\src\\app\\api",
+    "E:\\projects\\calope-be\\src\\server",
+    "E:\\projects\\calope-be\\src\\shared\\api-types.ts",
+    "E:\\projects\\calope-be\\src\\shared\\schemas.ts",
+    "E:\\projects\\calope-be\\src\\shared\\schemas.test.ts",
+    "E:\\projects\\calope-be\\src\\instrumentation.ts",
+    "E:\\projects\\calope-be\\db\\migrations",
+    "E:\\projects\\calope-be\\scripts",
+    "E:\\projects\\calope\\.team\\food-photo-calories\\diff-be-r1.patch",
+    "H:\\second-brain\\Projects\\calope\\agents\\backend-dev\\food-photo-calories.md"
+  ],
+  "ac_ids_done": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-7", "AC-8", "AC-10", "AC-11", "AC-12", "AC-13", "AC-14", "AC-16", "AC-17", "AC-18", "AC-19", "AC-20", "AC-21", "AC-23", "AC-24"],
+  "tests": { "passed": 147, "total": 147 },
+  "blockers": [
+    { "id": "B-1", "problem": "tsc and next build fail on this branch alone: src/shared/consent.ts (FE-owned) is missing. Build passed with a temporary stub, not committed.", "file": "src/server/consent-version.ts:1", "owner": "FE" },
+    { "id": "B-2", "problem": "No DB path ran against Postgres (rate-limit lock, consent and meal queries, migration apply). Live Anthropic call not run (no key).", "ac_ids": ["AC-13", "AC-16", "AC-17", "AC-18"], "owner": "Devops" },
+    { "id": "B-3", "problem": "Devops: add tsx (spike runner), db generate/migrate scripts; ESLint no-restricted-imports must exempt *.test.ts; health smoke now {status:ok}; POST smoke needs Origin header.", "owner": "Devops" },
+    { "id": "B-4", "problem": "Contract deltas: INTERNAL_ERROR 500 added; migration is 0000_init.sql not 0001; consent-version.ts shim; new-version consent closes old active record via withdrawn_at; strict Origin (missing = 403).", "owner": "Architect" }
+  ],
+  "quality_checks": {
+    "passed": false,
+    "failed": [
+      "type-check and build not clean on this branch: src/shared/consent.ts from FE missing",
+      "no SQL path run against Postgres; live Anthropic call not run"
+    ]
+  },
+  "brain_note": "H:\\second-brain\\Projects\\calope\\agents\\backend-dev\\food-photo-calories.md",
+  "summary": "All BE endpoints, error envelope, rate limit, consent, meals, migration, spike and AC-23 scripts built on be/food-photo-calories (53d8dfe). 147 node-env vitest tests pass with a mocked SDK. Not ready: needs FE consent.ts to type-check, and DB and live provider paths were not run."
+}

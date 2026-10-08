@@ -10,7 +10,8 @@ export const CONTRACT_ERRORS: Record<string, { status: number; message_th: strin
   CONSENT_REQUIRED: { status: 403, message_th: "ต้องให้ความยินยอมก่อนจึงจะวิเคราะห์รูปได้" },
   CONSENT_VERSION_MISMATCH: { status: 409, message_th: "ข้อความความยินยอมมีการอัปเดต กรุณาอ่านและยืนยันอีกครั้ง" },
   INVALID_FILE_TYPE: { status: 400, message_th: FILE_LIMIT },
-  FILE_TOO_LARGE: { status: 413, message_th: FILE_LIMIT },
+  // R4 (C-DOCS-RULINGS): states the 4 MB post-resize cap and the 10 MB original limit
+  FILE_TOO_LARGE: { status: 413, message_th: "ไฟล์ที่ส่งมาใหญ่เกิน 4 MB หลังย่อรูป กรุณาเลือกรูปอื่น (ต้นฉบับต้องไม่เกิน 10 MB)" },
   RATE_LIMITED: { status: 429, message_th: "วิเคราะห์ครบจำนวนต่อชั่วโมงแล้ว กรุณารอสักครู่" },
   PROVIDER_ERROR: { status: 502, message_th: PROVIDER },
   PROVIDER_INVALID_OUTPUT: { status: 502, message_th: PROVIDER },

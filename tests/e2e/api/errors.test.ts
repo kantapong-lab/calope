@@ -98,11 +98,10 @@ describe("C-ERR envelope for every code", () => {
     expect(["manual", undefined]).toContain(err.fallback);
   });
 
-  it("AC-1 file-type and size messages both state the formats and the 10 MB limit", () => {
-    for (const code of ["INVALID_FILE_TYPE", "FILE_TOO_LARGE"]) {
-      expect(CONTRACT_ERRORS[code].message_th).toContain("JPEG, PNG, WebP");
-      expect(CONTRACT_ERRORS[code].message_th).toContain("10 MB");
-    }
+  it("AC-1 file-type message states formats and 10 MB; file-too-large (R4) states 4 MB post-resize and 10 MB original", () => {
+    expect(CONTRACT_ERRORS.INVALID_FILE_TYPE.message_th).toContain("JPEG, PNG, WebP");
+    expect(CONTRACT_ERRORS.INVALID_FILE_TYPE.message_th).toContain("10 MB");
+    expect(CONTRACT_ERRORS.FILE_TOO_LARGE.message_th).toBe("ไฟล์ที่ส่งมาใหญ่เกิน 4 MB หลังย่อรูป กรุณาเลือกรูปอื่น (ต้นฉบับต้องไม่เกิน 10 MB)");
   });
 
   it("AC-11 provider failures on /api/analyze carry fallback manual", async () => {

@@ -50,15 +50,15 @@ export const POST = api("POST /api/analyze", async (req, _params, ctx) => {
   const bytes = Buffer.from(await photo.arrayBuffer());
   if (!detectImageType(bytes)) throw new AppError("INVALID_FILE_TYPE");
 
-  const decision = await checkAndRecordAnalysis(userId);
-  if (!decision.allowed) throw new AppError("RATE_LIMITED", { retryAfterSec: decision.retryAfterSec });
-
   let image: Buffer;
   try {
     image = await processImage(bytes);
   } catch {
     throw new AppError("INVALID_FILE_TYPE");
   }
+
+  const decision = await checkAndRecordAnalysis(userId);
+  if (!decision.allowed) throw new AppError("RATE_LIMITED", { retryAfterSec: decision.retryAfterSec });
 
   const model = getConfig().visionModel;
   ctx.extra.model = model;

@@ -1,0 +1,34 @@
+{
+  "role": "docs-writer",
+  "task": "food-photo-calories",
+  "step": "7",
+  "round": 1,
+  "status": "not-ready",
+  "paths_written": [
+    "E:\\projects\\calope-docs\\docs\\api\\food-photo-calories.md",
+    "E:\\projects\\calope-docs\\docs\\release-notes\\food-photo-calories.md",
+    "E:\\projects\\calope\\.team\\food-photo-calories\\release-notes.md",
+    "H:\\second-brain\\Projects\\calope\\agents\\docs-writer\\food-photo-calories.md"
+  ],
+  "blockers": [
+    {
+      "id": "B-1",
+      "problem": "No shell tool in this run: git commit on docs/food-photo-calories not made. Files are written, uncommitted.",
+      "owner": "Docs"
+    },
+    {
+      "id": "B-2",
+      "problem": "node validate-handoff.mjs not run (no shell tool). This handoff is unvalidated.",
+      "owner": "Docs"
+    }
+  ],
+  "quality_checks": {
+    "passed": false,
+    "failed": [
+      "git commit on docs/food-photo-calories not made (no shell tool)",
+      "validate-handoff.mjs not run (no shell tool)"
+    ]
+  },
+  "brain_note": "H:\\second-brain\\Projects\\calope\\agents\\docs-writer\\food-photo-calories.md",
+  "summary": "API doc (9 endpoints, error codes with verbatim message_th, rate limit, Origin rule, env names) and bilingual release notes written in calope-docs. Live provider, DB and AC-24 marked not yet verified; consent/USA/30-day retention PENDING LEGAL REVIEW. Commit and handoff validation not done (no shell tool)."
+}
